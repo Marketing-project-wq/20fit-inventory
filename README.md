@@ -64,6 +64,11 @@ Then open **http://localhost:5173**.
 
 > Run the backend and frontend separately with `npm run dev:server` and `npm run dev:web`.
 
+> **Configuration is optional.** The backend runs on safe development defaults with no
+> setup. To override anything (port, JWT secret, DB path, CORS origin), copy
+> `server/.env.example` to `server/.env` and edit it — `cp server/.env.example server/.env`.
+> Always set a strong `JWT_SECRET` before deploying to production.
+
 ### Demo accounts
 
 Every account uses the password **`20fit1234`**. The login screen lists them as one-click buttons.
