@@ -1,0 +1,25 @@
+{
+  "name": "20fit-shop-inventory",
+  "version": "1.0.0",
+  "private": true,
+  "description": "20FIT Shop Inventory Management System — Warehouse Stock, Goods Movement & Multi-Channel Inventory Control",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "seed": "npm run seed --workspace server",
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}
