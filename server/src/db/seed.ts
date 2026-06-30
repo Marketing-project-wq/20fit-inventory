@@ -5,6 +5,7 @@
  *
  * Run with: npm run seed  (inside /server)
  */
+import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { db } from './connection.js';
 import { newId, documentNumber } from '../utils/id.js';
@@ -252,7 +253,7 @@ function seedDocuments(ctx: any, userId: string, variantIds: Record<string, stri
   ).run(newId(), documentNumber('ADJ'), variantIds['CTR-RB-KIT'], ctx.locations.warehouse, userId);
 }
 
-function main() {
+export function seedDatabase() {
   console.log('Seeding 20FIT Shop Inventory database…');
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -289,6 +290,23 @@ function main() {
   console.log('Seed complete:', counts);
   console.log(`\nDemo login password for every account: ${DEMO_PASSWORD}`);
   console.log('Accounts: admin@20fit.id, ops@20fit.id, purchasing@20fit.id, warehouse@20fit.id, shop@20fit.id, finance@20fit.id, exec@20fit.id');
+  return counts;
 }
 
-main();
+/**
+ * Seed only when the database has no users yet. Used on server boot so a fresh
+ * deployment (e.g. Railway's ephemeral filesystem) comes up with working demo
+ * accounts and sample stock, while an existing/persisted database is left
+ * untouched. Returns true if seeding actually ran.
+ */
+export function seedIfEmpty(): boolean {
+  const { c } = db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number };
+  if (c > 0) return false;
+  seedDatabase();
+  return true;
+}
+
+// When executed directly (`npm run seed`), always reseed from scratch.
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  seedDatabase();
+}

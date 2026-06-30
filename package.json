@@ -13,7 +13,9 @@
     "dev:server": "npm run dev --workspace server",
     "dev:web": "npm run dev --workspace web",
     "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
-    "build": "npm run build --workspace web",
+    "build": "npm run build --workspace server && npm run build --workspace web",
+    "build:server": "npm run build --workspace server",
+    "build:web": "npm run build --workspace web",
     "start": "npm run start --workspace server"
   },
   "devDependencies": {

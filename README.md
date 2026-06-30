@@ -135,12 +135,37 @@ GET/POST /api/users  ·  GET /api/roles  ·  GET /api/audit-log
 ## Production build
 
 ```bash
-npm run build                 # builds the web bundle into web/dist
-npm run start --workspace server   # serves the compiled API
+npm run build      # compiles the server (→ server/dist) AND the web bundle (→ web/dist)
+npm run start      # runs the compiled server, which also serves the web UI
 ```
 
-The frontend can be served as static files (e.g. behind nginx) and pointed at the API via the
-`/api` proxy. Configuration lives in `server/.env` (`PORT`, `JWT_SECRET`, `DB_PATH`, `CORS_ORIGIN`).
+`npm run build` builds **both** workspaces. In production the Express server serves the compiled
+web bundle (`web/dist`) as static files and exposes the API under `/api` on the **same origin**, so
+the whole app runs as a single service — no separate static host or proxy needed. The frontend calls
+the API with a relative `/api` base URL, so it works on any domain with zero client configuration.
+
+Configuration is optional — every variable has a safe default (see `server/.env.example`). Override
+via environment variables: `PORT`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `DB_PATH`, `CORS_ORIGIN`.
+
+## Deploying to Railway
+
+The repo ships a `Dockerfile` and `railway.json`, so Railway builds and runs the whole app
+(API + UI) as one service:
+
+1. Create a Railway service from this GitHub repo (it auto-detects the `Dockerfile`).
+2. Deploy. The healthcheck (`/api/health`) confirms the service is up.
+3. Under **Settings → Networking**, click **Generate Domain** to expose it publicly
+   (the screenshot's "Unexposed service" just means no domain is attached yet).
+4. Open the domain and log in with any demo account (password `20fit1234`).
+
+**Set a real `JWT_SECRET`** in the service's **Variables** before real use — Railway injects `PORT`
+automatically, so you don't need to set it.
+
+> **Data persistence.** By default the SQLite database lives on the container's ephemeral disk and is
+> re-seeded with demo data whenever it starts empty (so a fresh deploy is immediately usable). To keep
+> data across deploys, attach a **Railway Volume** and point `DB_PATH` at its mount path
+> (e.g. mount at `/data` and set `DB_PATH=/data/inventory.db`). For production scale, migrate to the
+> Supabase/PostgreSQL backend described in the PRD (§8, §14).
 
 ---
 
