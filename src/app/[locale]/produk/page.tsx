@@ -3,6 +3,7 @@ import { Info } from "lucide-react";
 import { getSnapshot } from "@/lib/data";
 import { formatIDR } from "@/lib/utils";
 import { StockBadge } from "@/components/badges";
+import { QRCodeCell } from "@/components/products/QRCodeCell";
 
 const statusKey = { ok: "inStock", low: "lowStock", out: "outOfStock" } as const;
 
@@ -35,6 +36,7 @@ export default async function ProdukPage() {
           <table className="w-full min-w-[840px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted">
+                <th className="px-4 py-3 font-medium">QR</th>
                 <th className="px-4 py-3 font-medium">{tp("skuCode")}</th>
                 <th className="px-4 py-3 font-medium">{tp("productName")}</th>
                 <th className="px-4 py-3 font-medium">{tp("brand")}</th>
@@ -51,6 +53,9 @@ export default async function ProdukPage() {
                   key={s.variant_id}
                   className="border-b border-border last:border-0 hover:bg-surface-2"
                 >
+                  <td className="px-4 py-3">
+                    <QRCodeCell sku={s.sku_code} />
+                  </td>
                   <td className="px-4 py-3">
                     <span className="sku">{s.sku_code}</span>
                   </td>
