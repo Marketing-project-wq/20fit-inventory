@@ -4,8 +4,11 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
+  // pdfjs-dist (Xero PDF quotation parsing) runs only in Server Actions; keep it
+  // external so the bundler doesn't try to pull in its worker build.
+  serverExternalPackages: ["pdfjs-dist"],
   experimental: {
-    // Packing-list uploads (.xlsx/.csv) are sent to a Server Action; the
+    // File uploads (packing list / Xero) are sent to a Server Action; the
     // default 1 MB cap is too small for real supplier files.
     serverActions: { bodySizeLimit: "6mb" },
   },

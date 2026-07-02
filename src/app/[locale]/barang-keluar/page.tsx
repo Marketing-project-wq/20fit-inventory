@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { format } from "date-fns";
 import { Info } from "lucide-react";
 import { getSnapshot, getMovements } from "@/lib/data";
-import { StockOutForm } from "@/components/forms/StockOutForm";
+import { BarangKeluarTabs } from "@/components/forms/BarangKeluarTabs";
 import { MovementBadge, MOVEMENT_KEY } from "@/components/badges";
 
 export const dynamic = "force-dynamic";
@@ -39,14 +39,11 @@ export default async function BarangKeluarPage() {
           <p className="text-sm text-fg/90">{td("connectNotice")}</p>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-muted">{tf("manualEntry")}</h2>
-            <StockOutForm skus={snap.skus} locations={snap.locations} />
-          </div>
+        <div className="space-y-8">
+          <BarangKeluarTabs skus={snap.skus} locations={snap.locations} />
           <div>
             <h2 className="mb-3 text-sm font-semibold text-muted">{tf("recentOut")}</h2>
-            <div className="rounded-xl border border-border bg-surface p-4">
+            <div className="max-w-2xl rounded-xl border border-border bg-surface p-4">
               {recent.length > 0 ? (
                 <ul className="space-y-2">
                   {recent.map((m) => (

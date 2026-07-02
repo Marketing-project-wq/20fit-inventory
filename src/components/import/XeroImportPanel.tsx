@@ -8,74 +8,70 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  ArrowLeft,
   RotateCcw,
-  Tag,
+  PackageCheck,
   Loader2,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
-import {
-  parseXeroQuotation,
-  updatePricesFromXero,
-} from "@/lib/import-actions";
-import { matchRows, type MatchedRow, type SkuLite } from "@/lib/import";
-import { cn, formatIDR } from "@/lib/utils";
+import { parseXeroFile, importXeroSale } from "@/lib/xero-actions";
+import type { XeroMatchedRow } from "@/lib/xero";
+import type { SkuLite } from "@/lib/import";
+import { cn } from "@/lib/utils";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
 
-type SkuFull = SkuLite & {
-  cost_price: number | null;
-  selling_price: number | null;
-};
-type PriceField = "cost_price" | "selling_price";
+type Loc = { location_id: string; name: string };
 type Step = "upload" | "review" | "done";
 
 const ERROR_KEYS: Record<string, string> = {
   no_file: "errNoFile",
   too_large: "errTooLarge",
   parse_failed: "errParseFailed",
+  pdf_failed: "errPdfFailed",
   empty: "errParseFailed",
   no_columns: "errNoColumns",
-  no_price_column: "errNoPriceColumn",
-  no_rows: "errNoRows",
+  no_items: "errNoItems",
   unauthorized: "errUnauthorized",
   not_configured: "errNotConfigured",
   invalid_input: "errInvalidInput",
-  nothing_selected: "nothingSelectedXero",
+  insufficient_stock: "errInsufficientStock",
+  nothing_selected: "errNothingSelected",
+  no_location: "errNoLocation",
 };
 
 const STATUS_STYLE: Record<
-  MatchedRow["status"],
+  XeroMatchedRow["status"],
   { cls: string; icon: typeof CheckCircle2; key: string }
 > = {
-  matched: { cls: "bg-success/15 text-success", icon: CheckCircle2, key: "matched" },
-  review: { cls: "bg-warning/15 text-warning", icon: AlertTriangle, key: "review" },
+  mapped: { cls: "bg-success/15 text-success", icon: CheckCircle2, key: "statusMapped" },
+  review: { cls: "bg-warning/15 text-warning", icon: AlertTriangle, key: "statusReview" },
   not_found: { cls: "bg-danger/15 text-danger", icon: XCircle, key: "statusNotFound" },
 };
 
-export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
-  const t = useTranslations("import");
+export function XeroImportPanel({
+  skus,
+  locations,
+}: {
+  skus: SkuLite[];
+  locations: Loc[];
+}) {
+  const t = useTranslations("xero");
   const tc = useTranslations("common");
   const tf = useTranslations("form");
-  const tp = useTranslations("product");
 
   const [step, setStep] = useState<Step>("upload");
-  const [rows, setRows] = useState<MatchedRow[]>([]);
-  const [field, setField] = useState<PriceField>("selling_price");
-  const [fileName, setFileName] = useState("");
+  const [source, setSource] = useState<"pdf" | "csv">("csv");
+  const [rows, setRows] = useState<XeroMatchedRow[]>([]);
+  const [quoteNumber, setQuoteNumber] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [locationId, setLocationId] = useState(locations[0]?.location_id ?? "");
+  const [allowBackorder, setAllowBackorder] = useState(false);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
+  const [doneRef, setDoneRef] = useState("");
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const priceOf = useMemo(() => {
-    const m = new Map(skus.map((s) => [s.variant_id, s]));
-    return (variantId: string | null) =>
-      variantId
-        ? field === "cost_price"
-          ? (m.get(variantId)?.cost_price ?? null)
-          : (m.get(variantId)?.selling_price ?? null)
-        : null;
-  }, [skus, field]);
 
   const errMsg = (code: string | null) =>
     code ? t(ERROR_KEYS[code] ?? "errGeneric") : null;
@@ -91,25 +87,21 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
     const fd = new FormData();
     fd.append("file", file);
     startTransition(async () => {
-      const res = await parseXeroQuotation(fd);
+      const res = await parseXeroFile(fd);
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      // A row is included by default only when auto-matched AND it carries a price.
-      setRows(
-        matchRows(res.rows, skus).map((r) => ({
-          ...r,
-          include: r.status === "matched" && (r.unit_cost ?? 0) > 0,
-        })),
-      );
-      setFileName(file.name);
+      setSource(res.source);
+      setRows(res.rows);
+      setQuoteNumber(res.meta.quote_number);
+      setCustomer(res.meta.customer);
       setTruncated(res.truncated);
       setStep("review");
     });
   }
 
-  function patchRow(i: number, patch: Partial<MatchedRow>) {
+  function patchRow(i: number, patch: Partial<XeroMatchedRow>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
 
@@ -130,54 +122,67 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
       variant_id: s.variant_id,
       matched_sku: s.sku_code,
       matched_name: s.product_name,
-      status: "matched",
-      include: (rows[i]?.unit_cost ?? 0) > 0,
+      status: "mapped",
+      include: (rows[i]?.quantity ?? 0) > 0,
     });
   }
 
   const summary = useMemo(() => {
-    let matched = 0;
+    let mapped = 0;
     let review = 0;
     let notFound = 0;
     let included = 0;
     for (const r of rows) {
-      if (r.status === "matched") matched++;
+      if (r.status === "mapped") mapped++;
       else if (r.status === "review") review++;
       else notFound++;
-      if (r.include && r.variant_id && (r.unit_cost ?? 0) > 0) included++;
+      if (r.include && r.variant_id && r.quantity > 0) included++;
     }
-    return { matched, review, notFound, included };
+    return { mapped, review, notFound, included };
   }, [rows]);
 
   function confirm() {
     const items = rows
-      .filter((r) => r.include && r.variant_id && (r.unit_cost ?? 0) > 0)
+      .filter((r) => r.include && r.variant_id && r.quantity > 0)
       .map((r) => ({
         variant_id: r.variant_id as string,
-        price: r.unit_cost as number,
+        quantity: r.quantity,
+        description: r.description,
       }));
     if (items.length === 0) {
       setError("nothing_selected");
       return;
     }
+    if (!locationId) {
+      setError("no_location");
+      return;
+    }
     setError(null);
     startTransition(async () => {
-      const res = await updatePricesFromXero({ field, items });
+      const res = await importXeroSale({
+        location_id: locationId,
+        reference: quoteNumber.trim() || undefined,
+        customer: customer.trim() || undefined,
+        allow_backorder: allowBackorder,
+        items,
+      });
       if (!res.ok) {
         setError(res.error ?? "generic");
         return;
       }
       setDoneCount(res.count ?? items.length);
+      setDoneRef(quoteNumber.trim() || "—");
       setStep("done");
     });
   }
 
   function reset() {
     setRows([]);
-    setFileName("");
+    setQuoteNumber("");
+    setCustomer("");
+    setAllowBackorder(false);
     setTruncated(false);
     setError(null);
-    setDoneCount(0);
     setStep("upload");
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -185,22 +190,17 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
   // --------------------------------- Upload --------------------------------
   if (step === "upload") {
     return (
-      <form
-        onSubmit={handleParse}
-        className="mx-auto max-w-lg space-y-5 rounded-xl border border-border bg-surface p-6"
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-dim">
-            <ReceiptText className="text-accent" size={20} />
-          </span>
-          <p className="text-sm text-muted">{t("xeroSubtitle")}</p>
+      <form onSubmit={handleParse} className="max-w-lg space-y-5">
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-bg/40 p-3">
+          <ReceiptText className="mt-0.5 shrink-0 text-accent" size={18} />
+          <p className="text-sm text-muted">{t("subtitle")}</p>
         </div>
 
-        <Field label={t("xeroChooseFile")} hint={t("fileHint")}>
+        <Field label={t("chooseFile")} hint={t("fileHint")}>
           <input
             ref={fileRef}
             type="file"
-            accept=".xlsx,.xls,.csv"
+            accept=".pdf,.csv,.xlsx,.xls"
             className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-bg hover:file:opacity-90"
           />
         </Field>
@@ -226,14 +226,14 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
   // ---------------------------------- Done ---------------------------------
   if (step === "done") {
     return (
-      <div className="mx-auto max-w-lg space-y-5 rounded-xl border border-border bg-surface p-8 text-center">
+      <div className="max-w-lg space-y-5 rounded-xl border border-border bg-surface p-8 text-center">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/15">
-          <Tag className="text-success" size={26} />
+          <PackageCheck className="text-success" size={28} />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-fg">{t("doneTitleXero")}</h2>
+          <h2 className="text-lg font-semibold text-fg">{t("doneTitle")}</h2>
           <p className="mt-1 text-sm text-muted">
-            {t("pricesUpdated", { count: doneCount })}
+            {t("done", { count: doneCount, ref: doneRef })}
           </p>
         </div>
         <button
@@ -241,7 +241,7 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
           className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-fg transition-colors hover:border-accent hover:bg-surface-2"
         >
           <RotateCcw size={16} />
-          {t("updateAnother")}
+          {t("importAnother")}
         </button>
       </div>
     );
@@ -251,78 +251,132 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-border bg-surface p-5">
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-          <ReceiptText size={16} className="text-accent" />
-          <span className="font-medium text-fg">{fileName}</span>
-          <span className="text-dim">·</span>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium",
+              source === "pdf"
+                ? "bg-warning/15 text-warning"
+                : "bg-success/15 text-success",
+            )}
+          >
+            {source === "pdf" ? <FileText size={13} /> : <FileSpreadsheet size={13} />}
+            {source === "pdf" ? t("sourcePdf") : t("sourceCsv")}
+          </span>
           <span className="text-muted">{t("rowCount", { count: rows.length })}</span>
         </div>
 
-        <Field label={t("priceField")}>
-          <select
-            value={field}
-            onChange={(e) => setField(e.target.value as PriceField)}
-            className={cn(inputCls, "max-w-xs")}
-          >
-            <option value="selling_price">{tp("sellingPrice")}</option>
-            <option value="cost_price">{tp("costPrice")}</option>
-          </select>
-        </Field>
+        {source === "pdf" && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs text-warning">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>{t("pdfWarning")}</span>
+          </div>
+        )}
 
-        <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-          <span className="inline-flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-success" />
-            {t("mappedAuto")}: {summary.matched}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <AlertTriangle size={14} className="text-warning" />
-            {t("needsReview")}: {summary.review}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <XCircle size={14} className="text-danger" />
-            {t("notFound")}: {summary.notFound}
-          </span>
-        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label={t("quoteNumber")}>
+            <input
+              type="text"
+              value={quoteNumber}
+              onChange={(e) => setQuoteNumber(e.target.value)}
+              placeholder="QU-0000"
+              className={inputCls}
+            />
+          </Field>
+          <Field label={t("customer")}>
+            <input
+              type="text"
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              className={inputCls}
+            />
+          </Field>
+          <Field label={tc("location")}>
+            <select
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+              className={inputCls}
+            >
+              {locations.map((l) => (
+                <option key={l.location_id} value={l.location_id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 size={14} className="text-success" />
+              {t("autoMapped")}: {summary.mapped}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <AlertTriangle size={14} className="text-warning" />
+              {t("needsReview")}: {summary.review}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <XCircle size={14} className="text-danger" />
+              {t("notFound")}: {summary.notFound}
+            </span>
+          </p>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={allowBackorder}
+              onChange={(e) => setAllowBackorder(e.target.checked)}
+              className="h-4 w-4 accent-accent"
+            />
+            {tf("allowBackorder")}
+          </label>
+        </div>
       </div>
 
       {truncated && <Alert tone="danger">{t("truncated")}</Alert>}
-      <p className="text-xs text-muted">{t("xeroReviewHint")}</p>
+      <p className="text-xs text-muted">{t("reviewHint")}</p>
 
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-surface-2 text-left text-xs text-muted">
             <tr>
               <th className="px-3 py-2 font-medium">#</th>
-              <th className="px-3 py-2 font-medium">{t("fromFile")}</th>
-              <th className="px-3 py-2 font-medium">{t("matchedSku")}</th>
-              <th className="px-3 py-2 text-right font-medium">{t("currentPrice")}</th>
-              <th className="px-3 py-2 text-right font-medium">{t("priceCol")}</th>
+              <th className="px-3 py-2 font-medium">{t("description")}</th>
+              <th className="px-3 py-2 text-right font-medium">{tc("quantity")}</th>
+              <th className="px-3 py-2 font-medium">{tf("sku")}</th>
               <th className="px-3 py-2 text-center font-medium">{t("includeCol")}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => {
               const st = STATUS_STYLE[r.status];
-              const current = priceOf(r.variant_id);
               return (
                 <tr key={i} className="border-t border-border align-top">
                   <td className="px-3 py-2 font-mono text-xs text-dim">{r.line}</td>
                   <td className="px-3 py-2">
-                    <div className="font-medium text-fg">{r.raw_name}</div>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      {r.raw_code && (
-                        <span className="sku text-xs">{r.raw_code}</span>
+                    <div className="font-medium text-fg">{r.description}</div>
+                    <span
+                      className={cn(
+                        "mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                        st.cls,
                       )}
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                          st.cls,
-                        )}
-                      >
-                        <st.icon size={11} />
-                        {t(st.key)}
-                      </span>
-                    </div>
+                    >
+                      <st.icon size={11} />
+                      {t(st.key)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      min={0}
+                      value={r.quantity}
+                      onChange={(e) =>
+                        patchRow(i, {
+                          quantity: Math.max(0, Math.round(Number(e.target.value) || 0)),
+                        })
+                      }
+                      className={cn(inputCls, "w-20 py-1.5 text-right")}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <select
@@ -337,23 +391,6 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-xs text-muted">
-                    {current != null ? formatIDR(current) : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={r.unit_cost ?? 0}
-                      onChange={(e) =>
-                        patchRow(i, {
-                          unit_cost: Math.max(0, Number(e.target.value) || 0),
-                        })
-                      }
-                      className={cn(inputCls, "w-28 py-1.5 text-right font-mono")}
-                    />
                   </td>
                   <td className="px-3 py-2 text-center">
                     <input
@@ -377,14 +414,13 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
         <button
           onClick={reset}
           disabled={pending}
-          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
         >
-          <ArrowLeft size={16} />
           {tc("cancel")}
         </button>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted">
-            {t("toUpdate", { count: summary.included })}
+            {t("toRecord", { count: summary.included })}
           </span>
           <button
             onClick={confirm}
@@ -394,9 +430,9 @@ export function XeroQuotationImport({ skus }: { skus: SkuFull[] }) {
             {pending ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
-              <Tag size={16} />
+              <PackageCheck size={16} />
             )}
-            {t("updatePrices")}
+            {t("confirm")}
           </button>
         </div>
       </div>

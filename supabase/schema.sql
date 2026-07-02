@@ -451,31 +451,76 @@ BEGIN
 END; $$;
 
 -- ------------------------------------------------------------
--- PRICE IMPORT: bulk-update SKU cost/selling prices from an imported price
--- source (e.g. a Xero quotation). Prices are mutable variant attributes, not
--- the append-only ledger, so a plain UPDATE is correct.
+-- XERO QUOTATION IMPORT: learned mapping table + record a quotation as B2B
+-- goods-out (sales). Mapping = Xero free-text Description -> internal variant.
 -- ------------------------------------------------------------
-CREATE OR REPLACE FUNCTION shop_update_prices(
-  p_field text,   -- 'cost_price' | 'selling_price'
-  p_items jsonb   -- [{"variant_id":"...","price":123.45}, ...]
+CREATE TABLE IF NOT EXISTS shop_xero_product_mappings (
+  mapping_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  xero_description TEXT NOT NULL UNIQUE,
+  variant_id       UUID NOT NULL REFERENCES shop_product_variants(variant_id) ON DELETE CASCADE,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE shop_xero_product_mappings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_xero_map_read ON shop_xero_product_mappings;
+CREATE POLICY shop_xero_map_read ON shop_xero_product_mappings
+  FOR SELECT TO authenticated USING (true);
+GRANT SELECT ON shop_xero_product_mappings TO authenticated;
+
+-- Record a Xero quotation as B2B sales atomically, and learn each confirmed
+-- Description->variant mapping. Reuses the oversell + recompute logic.
+CREATE OR REPLACE FUNCTION shop_import_xero_sale(
+  p_location uuid,
+  p_reference text,             -- quote number, e.g. 'QU-0798'
+  p_customer text,              -- customer name
+  p_items jsonb,                -- [{variant_id, quantity, description}]
+  p_allow_backorder boolean DEFAULT false
 ) RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_item jsonb; v_count int := 0; v_price numeric;
+DECLARE
+  v_item jsonb; v_count int := 0;
+  v_variant uuid; v_qty int; v_desc text; v_available int; v_note text;
 BEGIN
-  IF p_field NOT IN ('cost_price','selling_price') THEN RAISE EXCEPTION 'invalid_field'; END IF;
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+  v_note := NULLIF(btrim(coalesce(p_customer, '')), '');
+  v_note := btrim(concat_ws(' — ', v_note, 'Import dari Xero'));
+
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
-    v_price := (v_item->>'price')::numeric;
-    IF v_price IS NULL OR v_price < 0 THEN RAISE EXCEPTION 'invalid_price'; END IF;
-    IF p_field = 'cost_price' THEN
-      UPDATE shop_product_variants SET cost_price = v_price, updated_at = NOW()
-        WHERE variant_id = (v_item->>'variant_id')::uuid;
-    ELSE
-      UPDATE shop_product_variants SET selling_price = v_price, updated_at = NOW()
-        WHERE variant_id = (v_item->>'variant_id')::uuid;
+    v_variant := (v_item->>'variant_id')::uuid;
+    v_qty := (v_item->>'quantity')::int;
+    v_desc := v_item->>'description';
+    IF v_variant IS NULL THEN RAISE EXCEPTION 'invalid_variant'; END IF;
+    IF v_qty IS NULL OR v_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+
+    IF NOT p_allow_backorder THEN
+      SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+      FROM shop_stock_levels WHERE variant_id = v_variant AND location_id = p_location FOR UPDATE;
+      v_available := COALESCE(v_available, 0);
+      IF v_qty > v_available THEN
+        RAISE EXCEPTION 'insufficient_stock: "%" available % < requested %',
+          coalesce(v_desc, ''), v_available, v_qty;
+      END IF;
     END IF;
-    IF FOUND THEN v_count := v_count + 1; END IF;
+
+    INSERT INTO shop_stock_movements(
+      variant_id, location_id, movement_type, quantity,
+      reference_type, reference_number, sales_channel, notes)
+    VALUES (v_variant, p_location, 'sale', v_qty,
+      'xero_quotation', NULLIF(btrim(coalesce(p_reference,'')), ''), 'b2b_direct', v_note);
+
+    PERFORM shop_recompute_level(v_variant, p_location);
+
+    IF v_desc IS NOT NULL AND length(btrim(v_desc)) > 0 THEN
+      INSERT INTO shop_xero_product_mappings(xero_description, variant_id)
+      VALUES (btrim(v_desc), v_variant)
+      ON CONFLICT (xero_description)
+        DO UPDATE SET variant_id = EXCLUDED.variant_id, updated_at = NOW();
+    END IF;
+
+    v_count := v_count + 1;
   END LOOP;
+
   RETURN v_count;
 END; $$;
 
@@ -488,7 +533,7 @@ BEGIN
     'shop_save_opname_counts(uuid,jsonb)',
     'shop_apply_opname(uuid,uuid)',
     'shop_import_packing_list(uuid,jsonb,text)',
-    'shop_update_prices(text,jsonb)'
+    'shop_import_xero_sale(uuid,text,text,jsonb,boolean)'
   ]) LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM public, anon', fn);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', fn);

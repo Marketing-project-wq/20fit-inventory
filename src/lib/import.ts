@@ -306,6 +306,29 @@ export function matchRows(parsed: ParsedRow[], skus: SkuLite[]): MatchedRow[] {
   });
 }
 
+/** Best fuzzy SKU for a free-text name (token overlap). Null below `min`. */
+export function fuzzyBestVariant(
+  text: string,
+  skus: SkuLite[],
+  min = 0.5,
+): { sku: SkuLite; score: number } | null {
+  const qset = new Set(tokens(text));
+  if (qset.size === 0) return null;
+  let best: SkuLite | null = null;
+  let bestScore = 0;
+  for (const s of skus) {
+    const target = new Set([...tokens(s.product_name), ...tokens(s.sku_code)]);
+    let inter = 0;
+    for (const x of qset) if (target.has(x)) inter++;
+    const score = inter / qset.size;
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return best && bestScore >= min ? { sku: best, score: bestScore } : null;
+}
+
 function confirmed(base: ParsedRow, sku: SkuLite): MatchedRow {
   return {
     ...base,
