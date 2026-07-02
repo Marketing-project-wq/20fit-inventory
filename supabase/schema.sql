@@ -264,7 +264,7 @@ BEGIN
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_read', t);
-    EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING (true)', t || '_read', t);
+    EXECUTE format('CREATE POLICY %I ON %I FOR SELECT TO authenticated USING (true)', t || '_read', t);
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_write', t);
     EXECUTE format('CREATE POLICY %I ON %I FOR ALL TO authenticated USING (true) WITH CHECK (true)', t || '_write', t);
   END LOOP;

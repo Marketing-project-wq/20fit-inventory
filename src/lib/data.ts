@@ -55,7 +55,7 @@ function statusFor(onHand: number, reorder: number | null): StockStatus {
 
 /** Fetch the full inventory snapshot (SKUs + per-location stock), joined in JS. */
 export async function getSnapshot(): Promise<Snapshot | null> {
-  const sb = createSupabaseServerClient();
+  const sb = await createSupabaseServerClient();
   if (!sb) return null;
 
   const [variants, products, brands, categories, locations, stock] =
@@ -139,7 +139,7 @@ export async function getSnapshot(): Promise<Snapshot | null> {
 
 /** Recent stock movements (ledger), newest first. */
 export async function getMovements(limit = 100): Promise<Movement[] | null> {
-  const sb = createSupabaseServerClient();
+  const sb = await createSupabaseServerClient();
   if (!sb) return null;
 
   const [movements, variants, products] = await Promise.all([
@@ -198,7 +198,7 @@ export async function getDashboard(): Promise<DashboardData | null> {
   const belowReorder = snapshot.skus.filter((s) => s.status === "low").length;
   const outOfStock = snapshot.skus.filter((s) => s.status === "out").length;
 
-  const sb = createSupabaseServerClient();
+  const sb = await createSupabaseServerClient();
   let openPurchaseOrders = 0;
   if (sb) {
     const { count } = await sb

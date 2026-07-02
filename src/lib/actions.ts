@@ -2,7 +2,12 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  getCurrentUser,
+  createSupabaseServerClient,
+} from "@/lib/supabase/server";
 
 export type ActionState = {
   ok: boolean;
@@ -40,6 +45,7 @@ export async function recordStockIn(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  if (!(await getCurrentUser())) return { ok: false, error: "unauthorized" };
   const parsed = stockInSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
@@ -62,10 +68,41 @@ export async function recordStockIn(
   return { ok: true, message: "saved" };
 }
 
+// --------------------------------- Auth ------------------------------------
+
+export async function signIn(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const locale = String(formData.get("locale") ?? "id");
+  const rawNext = String(formData.get("next") ?? "");
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : `/${locale}`;
+
+  if (!email || !password) return { ok: false, error: "invalid_input" };
+  const sb = await createSupabaseServerClient();
+  if (!sb) return { ok: false, error: "not_configured" };
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) return { ok: false, error: "invalid_credentials" };
+
+  redirect(next);
+}
+
+export async function signOut(formData: FormData): Promise<void> {
+  const locale = String(formData.get("locale") ?? "id");
+  const sb = await createSupabaseServerClient();
+  if (sb) await sb.auth.signOut();
+  redirect(`/${locale}/login`);
+}
+
 export async function recordStockOut(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  if (!(await getCurrentUser())) return { ok: false, error: "unauthorized" };
   const parsed = stockOutSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { ok: false, error: "invalid_input" };
 
