@@ -269,3 +269,70 @@ BEGIN
     EXECUTE format('CREATE POLICY %I ON %I FOR ALL TO authenticated USING (true) WITH CHECK (true)', t || '_write', t);
   END LOOP;
 END $$;
+
+-- ------------------------------------------------------------
+-- ATOMIC MOVEMENT RECORDER (PRD §17: atomic stock-out check)
+-- Appends a movement and recomputes the cached stock level in one transaction.
+-- Outbound movements are blocked if they exceed available stock, unless
+-- p_allow_backorder is true.
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION shop_record_movement(
+  p_variant uuid,
+  p_location uuid,
+  p_type text,
+  p_qty int,
+  p_unit_cost numeric DEFAULT NULL,
+  p_reference_type text DEFAULT 'manual',
+  p_sales_channel text DEFAULT NULL,
+  p_marketplace_order text DEFAULT NULL,
+  p_reason text DEFAULT NULL,
+  p_notes text DEFAULT NULL,
+  p_allow_backorder boolean DEFAULT false
+) RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_available int;
+  v_outbound boolean := p_type IN ('sale','transfer_out','return_out','adjustment_out','write_off');
+  v_movement uuid;
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN
+    RAISE EXCEPTION 'invalid_quantity: quantity must be positive';
+  END IF;
+
+  IF v_outbound AND NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+    FROM shop_stock_levels
+    WHERE variant_id = p_variant AND location_id = p_location
+    FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN
+      RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty;
+    END IF;
+  END IF;
+
+  INSERT INTO shop_stock_movements(
+    variant_id, location_id, movement_type, quantity, unit_cost,
+    reference_type, sales_channel, marketplace_order_number, reason_code, notes)
+  VALUES (p_variant, p_location, p_type, p_qty, p_unit_cost,
+    p_reference_type, p_sales_channel, p_marketplace_order, p_reason, p_notes)
+  RETURNING movement_id INTO v_movement;
+
+  INSERT INTO shop_stock_levels(variant_id, location_id, quantity_on_hand, quantity_reserved)
+  SELECT p_variant, p_location,
+    COALESCE(SUM(CASE WHEN movement_type IN ('purchase_receipt','transfer_in','return_in','adjustment_in')
+                 THEN quantity ELSE -quantity END), 0),
+    0
+  FROM shop_stock_movements
+  WHERE variant_id = p_variant AND location_id = p_location
+  ON CONFLICT (variant_id, location_id)
+  DO UPDATE SET quantity_on_hand = EXCLUDED.quantity_on_hand, last_updated_at = NOW();
+
+  RETURN v_movement;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean) TO authenticated, service_role;

@@ -113,5 +113,25 @@
     "notes": "Notes",
     "reserved": "Reserved",
     "available": "Available"
+  },
+  "form": {
+    "sku": "SKU",
+    "selectSku": "Select SKU",
+    "unitCost": "Cost Price (Rp)",
+    "otherChannel": "Other",
+    "marketplaceOrder": "Marketplace Order No.",
+    "marketplaceHint": "Fill in for online sales",
+    "customer": "Customer / Sales",
+    "allowBackorder": "Allow negative stock (backorder)",
+    "submitIn": "Receive Goods",
+    "submitOut": "Issue Goods",
+    "saved": "Saved",
+    "insufficientStock": "Not enough stock for this transaction.",
+    "notConfigured": "SUPABASE_SERVICE_ROLE_KEY is not set on the server.",
+    "invalidInput": "Invalid data. Please check the fields.",
+    "optional": "optional",
+    "manualEntry": "Manual Entry",
+    "recentIn": "Recent Goods In",
+    "recentOut": "Recent Goods Out"
   }
 }
