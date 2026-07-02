@@ -113,5 +113,25 @@
     "notes": "Catatan",
     "reserved": "Dipesan",
     "available": "Tersedia"
+  },
+  "form": {
+    "sku": "SKU",
+    "selectSku": "Pilih SKU",
+    "unitCost": "Harga Modal (Rp)",
+    "otherChannel": "Lainnya",
+    "marketplaceOrder": "No. Order Marketplace",
+    "marketplaceHint": "Isi jika penjualan online",
+    "customer": "Pelanggan / Sales",
+    "allowBackorder": "Izinkan stok minus (backorder)",
+    "submitIn": "Terima Barang",
+    "submitOut": "Keluarkan Barang",
+    "saved": "Tersimpan",
+    "insufficientStock": "Stok tidak cukup untuk transaksi ini.",
+    "notConfigured": "SUPABASE_SERVICE_ROLE_KEY belum diset di server.",
+    "invalidInput": "Data tidak valid. Periksa kembali isian.",
+    "optional": "opsional",
+    "manualEntry": "Input Manual",
+    "recentIn": "Barang Masuk Terbaru",
+    "recentOut": "Barang Keluar Terbaru"
   }
 }
