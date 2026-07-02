@@ -14,6 +14,7 @@
     "transfer": "Transfer",
     "stockOpname": "Stock Opname",
     "importPacking": "Import Packing List",
+    "importXero": "Xero Quotation",
     "warehouseAccess": "Warehouse Access",
     "reports": "Reports",
     "settings": "Settings"
@@ -120,7 +121,22 @@
     "errNotConfigured": "Database is not connected.",
     "errInvalidInput": "Invalid data. Please check the fields.",
     "errNoLocation": "Choose a destination location.",
-    "errGeneric": "Something went wrong. Please try again."
+    "errGeneric": "Something went wrong. Please try again.",
+    "xeroTitle": "Import Xero Quotation",
+    "xeroPageSubtitle": "Update SKU prices from a quotation or invoice exported from Xero.",
+    "xeroSubtitle": "Upload a Xero quotation/invoice file. Each row is matched to a SKU; then choose which price to update.",
+    "xeroChooseFile": "Choose Xero File",
+    "priceField": "Update Price",
+    "priceCol": "Price (from file)",
+    "currentPrice": "Current",
+    "xeroReviewHint": "Columns were auto-detected. Check the SKU match and price on each row. Only checked rows (with a SKU) get updated.",
+    "toUpdate": "{count} SKUs will be updated",
+    "updatePrices": "Update Prices",
+    "pricesUpdated": "{count} SKU prices updated.",
+    "doneTitleXero": "Prices Updated",
+    "updateAnother": "Update More",
+    "nothingSelectedXero": "Select at least one row (with a SKU and price) to update.",
+    "errNoPriceColumn": "No price column (UnitAmount) found. Make sure the file has a unit price column."
   },
   "common": {
     "save": "Save",

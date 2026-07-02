@@ -17,22 +17,16 @@ async function requireUser() {
 }
 
 const MAX_BYTES = 5_000_000;
+const ROW_LIMIT = 1000;
 
-export type ParseResult =
-  | {
-      ok: true;
-      rows: ParsedRow[];
-      cols: Cols;
-      sheetName: string;
-      truncated: boolean;
-    }
-  | { ok: false; error: string };
-
-/** Parse an uploaded packing list (.xlsx / .xls / .csv) into structured rows. */
-export async function parsePackingList(formData: FormData): Promise<ParseResult> {
-  const { error: authErr } = await requireUser();
-  if (authErr) return { ok: false, error: authErr };
-
+// Shared spreadsheet reader (private — not a Server Action). Turns an uploaded
+// .xlsx/.xls/.csv into a raw 2-D grid + detected columns.
+async function readGrid(
+  formData: FormData,
+): Promise<
+  | { ok: true; grid: unknown[][]; cols: Cols; headerIndex: number; sheetName: string }
+  | { ok: false; error: string }
+> {
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0)
     return { ok: false, error: "no_file" };
@@ -55,23 +49,38 @@ export async function parsePackingList(formData: FormData): Promise<ParseResult>
   } catch {
     return { ok: false, error: "parse_failed" };
   }
-
   if (!grid.length) return { ok: false, error: "empty" };
 
   const { headerIndex, cols } = detectColumns(grid);
-  if (cols.name == null && cols.code == null)
-    return { ok: false, error: "no_columns" };
-
-  const all = extractRows(grid, headerIndex, cols);
-  if (all.length === 0) return { ok: false, error: "no_rows" };
-
-  // Guard the client payload; a well-formed packing list is well under this.
-  const LIMIT = 1000;
-  const rows = all.slice(0, LIMIT);
-  return { ok: true, rows, cols, sheetName, truncated: all.length > LIMIT };
+  return { ok: true, grid, cols, headerIndex, sheetName };
 }
 
-// -------------------------------- Import -----------------------------------
+export type ParseResult =
+  | { ok: true; rows: ParsedRow[]; cols: Cols; sheetName: string; truncated: boolean }
+  | { ok: false; error: string };
+
+// ----------------------------- Packing list --------------------------------
+/** Parse an uploaded packing list (.xlsx / .xls / .csv) into structured rows. */
+export async function parsePackingList(formData: FormData): Promise<ParseResult> {
+  const { error: authErr } = await requireUser();
+  if (authErr) return { ok: false, error: authErr };
+
+  const g = await readGrid(formData);
+  if (!g.ok) return g;
+  if (g.cols.name == null && g.cols.code == null)
+    return { ok: false, error: "no_columns" };
+
+  const all = extractRows(g.grid, g.headerIndex, g.cols);
+  if (all.length === 0) return { ok: false, error: "no_rows" };
+  return {
+    ok: true,
+    rows: all.slice(0, ROW_LIMIT),
+    cols: g.cols,
+    sheetName: g.sheetName,
+    truncated: all.length > ROW_LIMIT,
+  };
+}
+
 const importSchema = z.object({
   location_id: z.string().uuid(),
   reference: z.string().trim().max(200).optional(),
@@ -84,14 +93,10 @@ const importSchema = z.object({
       }),
     )
     .min(1)
-    .max(1000),
+    .max(ROW_LIMIT),
 });
 
-export type ImportResult = {
-  ok: boolean;
-  count?: number;
-  error?: string;
-};
+export type ImportResult = { ok: boolean; count?: number; error?: string };
 
 /** Commit the confirmed rows as a single atomic bulk goods-in. */
 export async function importPackingList(input: unknown): Promise<ImportResult> {
@@ -110,6 +115,64 @@ export async function importPackingList(input: unknown): Promise<ImportResult> {
       unit_cost: i.unit_cost ?? null,
     })),
     p_reference: d.reference || null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true, count: typeof data === "number" ? data : d.items.length };
+}
+
+// --------------------------- Xero quotation --------------------------------
+/** Parse an uploaded Xero quotation/invoice (.xlsx / .xls / .csv). Requires a
+ *  unit-price column (Xero "UnitAmount"). */
+export async function parseXeroQuotation(formData: FormData): Promise<ParseResult> {
+  const { error: authErr } = await requireUser();
+  if (authErr) return { ok: false, error: authErr };
+
+  const g = await readGrid(formData);
+  if (!g.ok) return g;
+  if (g.cols.name == null && g.cols.code == null)
+    return { ok: false, error: "no_columns" };
+  if (g.cols.price == null) return { ok: false, error: "no_price_column" };
+
+  const all = extractRows(g.grid, g.headerIndex, g.cols).filter(
+    (r) => r.unit_cost != null,
+  );
+  if (all.length === 0) return { ok: false, error: "no_rows" };
+  return {
+    ok: true,
+    rows: all.slice(0, ROW_LIMIT),
+    cols: g.cols,
+    sheetName: g.sheetName,
+    truncated: all.length > ROW_LIMIT,
+  };
+}
+
+const priceSchema = z.object({
+  field: z.enum(["cost_price", "selling_price"]),
+  items: z
+    .array(
+      z.object({
+        variant_id: z.string().uuid(),
+        price: z.number().nonnegative(),
+      }),
+    )
+    .min(1)
+    .max(ROW_LIMIT),
+});
+
+/** Commit the confirmed rows as a single atomic bulk price update. */
+export async function updatePricesFromXero(input: unknown): Promise<ImportResult> {
+  const { sb, error: authErr } = await requireUser();
+  if (authErr) return { ok: false, error: authErr };
+
+  const parsed = priceSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+
+  const { data, error } = await sb!.rpc("shop_update_prices", {
+    p_field: d.field,
+    p_items: d.items.map((i) => ({ variant_id: i.variant_id, price: i.price })),
   });
   if (error) return { ok: false, error: error.message };
 

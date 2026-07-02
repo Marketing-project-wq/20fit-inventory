@@ -14,6 +14,7 @@
     "transfer": "Transfer",
     "stockOpname": "Stock Opname",
     "importPacking": "Import Packing List",
+    "importXero": "Quotation Xero",
     "warehouseAccess": "Akses Gudang",
     "reports": "Laporan",
     "settings": "Pengaturan"
@@ -120,7 +121,22 @@
     "errNotConfigured": "Database belum terhubung.",
     "errInvalidInput": "Data tidak valid. Periksa kembali isian.",
     "errNoLocation": "Pilih lokasi tujuan.",
-    "errGeneric": "Terjadi kesalahan. Coba lagi."
+    "errGeneric": "Terjadi kesalahan. Coba lagi.",
+    "xeroTitle": "Import Quotation Xero",
+    "xeroPageSubtitle": "Perbarui harga SKU dari quotation atau invoice yang diekspor dari Xero.",
+    "xeroSubtitle": "Unggah file quotation/invoice dari Xero. Sistem mencocokkan tiap baris dengan SKU, lalu Anda pilih harga mana yang diperbarui.",
+    "xeroChooseFile": "Pilih File Xero",
+    "priceField": "Perbarui Harga",
+    "priceCol": "Harga (dari File)",
+    "currentPrice": "Harga Saat Ini",
+    "xeroReviewHint": "Kolom terdeteksi otomatis. Periksa pencocokan SKU dan harga tiap baris. Hanya baris tercentang (dengan SKU) yang harganya diperbarui.",
+    "toUpdate": "{count} SKU akan diperbarui",
+    "updatePrices": "Perbarui Harga",
+    "pricesUpdated": "{count} harga SKU berhasil diperbarui.",
+    "doneTitleXero": "Harga Diperbarui",
+    "updateAnother": "Perbarui Lagi",
+    "nothingSelectedXero": "Pilih minimal satu baris (dengan SKU & harga) untuk diperbarui.",
+    "errNoPriceColumn": "Kolom harga (UnitAmount) tidak ditemukan. Pastikan file berisi kolom harga satuan."
   },
   "common": {
     "save": "Simpan",

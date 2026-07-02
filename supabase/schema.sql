@@ -450,6 +450,35 @@ BEGIN
   RETURN v_count;
 END; $$;
 
+-- ------------------------------------------------------------
+-- PRICE IMPORT: bulk-update SKU cost/selling prices from an imported price
+-- source (e.g. a Xero quotation). Prices are mutable variant attributes, not
+-- the append-only ledger, so a plain UPDATE is correct.
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION shop_update_prices(
+  p_field text,   -- 'cost_price' | 'selling_price'
+  p_items jsonb   -- [{"variant_id":"...","price":123.45}, ...]
+) RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_item jsonb; v_count int := 0; v_price numeric;
+BEGIN
+  IF p_field NOT IN ('cost_price','selling_price') THEN RAISE EXCEPTION 'invalid_field'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    v_price := (v_item->>'price')::numeric;
+    IF v_price IS NULL OR v_price < 0 THEN RAISE EXCEPTION 'invalid_price'; END IF;
+    IF p_field = 'cost_price' THEN
+      UPDATE shop_product_variants SET cost_price = v_price, updated_at = NOW()
+        WHERE variant_id = (v_item->>'variant_id')::uuid;
+    ELSE
+      UPDATE shop_product_variants SET selling_price = v_price, updated_at = NOW()
+        WHERE variant_id = (v_item->>'variant_id')::uuid;
+    END IF;
+    IF FOUND THEN v_count := v_count + 1; END IF;
+  END LOOP;
+  RETURN v_count;
+END; $$;
+
 DO $$
 DECLARE fn text;
 BEGIN
@@ -458,7 +487,8 @@ BEGIN
     'shop_create_opname(uuid,uuid)',
     'shop_save_opname_counts(uuid,jsonb)',
     'shop_apply_opname(uuid,uuid)',
-    'shop_import_packing_list(uuid,jsonb,text)'
+    'shop_import_packing_list(uuid,jsonb,text)',
+    'shop_update_prices(text,jsonb)'
   ]) LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM public, anon', fn);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', fn);

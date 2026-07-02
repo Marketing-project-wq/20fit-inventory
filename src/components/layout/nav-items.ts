@@ -8,6 +8,7 @@ import {
   Repeat,
   ClipboardCheck,
   FileSpreadsheet,
+  ReceiptText,
   DoorOpen,
   BarChart3,
   Settings,
@@ -27,6 +28,7 @@ export type NavItem = {
     | "transfer"
     | "stockOpname"
     | "importPacking"
+    | "importXero"
     | "warehouseAccess"
     | "reports"
     | "settings";
@@ -43,6 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/transfer", key: "transfer", icon: Repeat },
   { href: "/stock-opname", key: "stockOpname", icon: ClipboardCheck },
   { href: "/import-packing", key: "importPacking", icon: FileSpreadsheet },
+  { href: "/import-xero", key: "importXero", icon: ReceiptText },
   { href: "/akses-gudang", key: "warehouseAccess", icon: DoorOpen },
   { href: "/laporan", key: "reports", icon: BarChart3 },
   { href: "/pengaturan", key: "settings", icon: Settings },
