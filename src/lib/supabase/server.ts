@@ -1,12 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseUrl, getSupabaseAnonKey } from "./env";
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  return Boolean(getSupabaseUrl() && getSupabaseAnonKey());
 }
 
 /**
@@ -15,8 +13,8 @@ export function isSupabaseConfigured(): boolean {
  * environment is not configured yet.
  */
 export async function createSupabaseServerClient(): Promise<SupabaseClient | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
   if (!url || !key) return null;
 
   const cookieStore = await cookies();
