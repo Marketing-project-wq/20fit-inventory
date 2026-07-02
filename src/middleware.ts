@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import createIntlMiddleware from "next-intl/middleware";
 import { createServerClient } from "@supabase/ssr";
 import { routing } from "./i18n/routing";
+import { getSupabaseUrl, getSupabaseAnonKey } from "./lib/supabase/env";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
@@ -11,8 +12,8 @@ export async function middleware(request: NextRequest) {
   // If next-intl issued a redirect, honor it before running auth.
   if (response.headers.get("location")) return response;
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = getSupabaseUrl();
+  const key = getSupabaseAnonKey();
   // Auth not configured yet -> don't gate (keeps the app usable during setup).
   if (!url || !key) return response;
 
