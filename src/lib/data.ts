@@ -222,6 +222,35 @@ export async function getDashboard(): Promise<DashboardData | null> {
   };
 }
 
+// ------------------------------- Reports -----------------------------------
+export type RawMovement = {
+  variant_id: string;
+  movement_type: string;
+  quantity: number;
+  sales_channel: string | null;
+  performed_at: string;
+};
+
+/** SKUs (with stock + prices) plus the full movement ledger, for reporting. */
+export async function getReportSource(): Promise<{
+  skus: Sku[];
+  movements: RawMovement[];
+} | null> {
+  const snapshot = await getSnapshot();
+  if (!snapshot) return null;
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from("shop_stock_movements")
+    .select("variant_id,movement_type,quantity,sales_channel,performed_at")
+    .order("performed_at", { ascending: true })
+    .limit(10000);
+  if (error) return null;
+
+  return { skus: snapshot.skus, movements: (data ?? []) as RawMovement[] };
+}
+
 // ----------------------------- Stock opname --------------------------------
 export type OpnameSession = {
   session_id: string;
