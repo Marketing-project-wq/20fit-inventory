@@ -251,6 +251,58 @@ export async function getReportSource(): Promise<{
   return { skus: snapshot.skus, movements: (data ?? []) as RawMovement[] };
 }
 
+// -------------------------- Warehouse access -------------------------------
+export type AccessLog = {
+  log_id: string;
+  location_id: string;
+  location_name: string;
+  visitor_name: string | null;
+  purpose: string | null;
+  notes: string | null;
+  check_in_at: string;
+  check_out_at: string | null;
+};
+
+/** Locations for select inputs (lightweight). */
+export async function getLocations(): Promise<
+  { location_id: string; name: string }[] | null
+> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("shop_locations")
+    .select("location_id,name")
+    .order("name");
+  if (error) return null;
+  return data ?? [];
+}
+
+/** Warehouse check-in/check-out log, newest first. */
+export async function getAccessLogs(limit = 100): Promise<AccessLog[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const [logs, locations] = await Promise.all([
+    sb
+      .from("shop_warehouse_access_log")
+      .select("log_id,location_id,visitor_name,purpose,notes,check_in_at,check_out_at")
+      .order("check_in_at", { ascending: false })
+      .limit(limit),
+    sb.from("shop_locations").select("location_id,name"),
+  ]);
+  if (logs.error) return null;
+  const locName = new Map((locations.data ?? []).map((l) => [l.location_id, l.name]));
+  return (logs.data ?? []).map((l) => ({
+    log_id: l.log_id,
+    location_id: l.location_id,
+    location_name: locName.get(l.location_id) ?? "—",
+    visitor_name: l.visitor_name,
+    purpose: l.purpose,
+    notes: l.notes,
+    check_in_at: l.check_in_at,
+    check_out_at: l.check_out_at,
+  }));
+}
+
 // ----------------------------- Stock opname --------------------------------
 export type OpnameSession = {
   session_id: string;

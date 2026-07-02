@@ -77,7 +77,21 @@
     "visitor": "Visitor",
     "purpose": "Purpose",
     "enterTime": "Entry Time",
-    "exitTime": "Exit Time"
+    "exitTime": "Exit Time",
+    "newVisit": "Log a Visit",
+    "currentlyInside": "Currently Inside",
+    "history": "Access History",
+    "visitorName": "Visitor Name",
+    "visitorPlaceholder": "Full name",
+    "purposeHint": "optional",
+    "purposePlaceholder": "e.g. Delivery, Stock audit, Maintenance",
+    "checkedIn": "Checked in.",
+    "noneInside": "No one is currently in the warehouse.",
+    "noHistory": "No access history yet.",
+    "inside": "Inside",
+    "duration": "Duration",
+    "hoursShort": "h",
+    "minutesShort": "m"
   },
   "import": {
     "uploadPackingList": "Upload Packing List",
