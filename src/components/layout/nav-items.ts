@@ -7,6 +7,7 @@ import {
   History,
   Repeat,
   ClipboardCheck,
+  FileSpreadsheet,
   DoorOpen,
   BarChart3,
   Settings,
@@ -25,6 +26,7 @@ export type NavItem = {
     | "movements"
     | "transfer"
     | "stockOpname"
+    | "importPacking"
     | "warehouseAccess"
     | "reports"
     | "settings";
@@ -40,6 +42,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/mutasi", key: "movements", icon: History },
   { href: "/transfer", key: "transfer", icon: Repeat },
   { href: "/stock-opname", key: "stockOpname", icon: ClipboardCheck },
+  { href: "/import-packing", key: "importPacking", icon: FileSpreadsheet },
   { href: "/akses-gudang", key: "warehouseAccess", icon: DoorOpen },
   { href: "/laporan", key: "reports", icon: BarChart3 },
   { href: "/pengaturan", key: "settings", icon: Settings },
