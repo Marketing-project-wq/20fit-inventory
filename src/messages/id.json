@@ -1,0 +1,108 @@
+{
+  "app": {
+    "name": "20FIT Shop",
+    "shortName": "20FIT Inventaris",
+    "tagline": "Sistem Manajemen Inventaris"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "products": "Produk & SKU",
+    "stock": "Tingkat Stok",
+    "goodsIn": "Barang Masuk",
+    "goodsOut": "Barang Keluar",
+    "movements": "Mutasi Stok",
+    "transfer": "Transfer",
+    "stockOpname": "Stock Opname",
+    "warehouseAccess": "Akses Gudang",
+    "reports": "Laporan",
+    "settings": "Pengaturan"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Ringkasan kondisi inventaris 20FIT Shop",
+    "totalInventoryValue": "Total Nilai Inventaris",
+    "belowReorder": "SKU di Bawah Reorder",
+    "outOfStock": "Stok Habis",
+    "openPurchaseOrders": "PO Terbuka",
+    "lowStockWatchlist": "Watchlist Stok Rendah",
+    "recentMovements": "Mutasi Terbaru",
+    "quickActions": "Aksi Cepat",
+    "receiveGoods": "Terima Barang",
+    "issueGoods": "Keluar Barang",
+    "scanQR": "Scan QR",
+    "startOpname": "Stock Opname",
+    "connectNotice": "Data inventaris akan tampil setelah database Supabase terhubung."
+  },
+  "product": {
+    "skuCode": "Kode SKU",
+    "productName": "Nama Produk",
+    "brand": "Brand",
+    "category": "Kategori",
+    "costPrice": "Harga Modal",
+    "sellingPrice": "Harga Jual",
+    "stockOnHand": "Stok di Tangan",
+    "reorderPoint": "Titik Pemesanan Ulang",
+    "qrCode": "QR Code / Barcode",
+    "downloadQR": "Unduh QR Code",
+    "scanQR": "Scan QR / Barcode"
+  },
+  "stock": {
+    "inStock": "Tersedia",
+    "lowStock": "Stok Menipis",
+    "outOfStock": "Habis",
+    "critical": "Kritis",
+    "openingStock": "Stok Awal",
+    "closingStock": "Stok Akhir",
+    "goodsIn": "Barang Masuk",
+    "goodsOut": "Barang Keluar",
+    "offline": "Offline",
+    "online": "Online / Marketplace"
+  },
+  "movement": {
+    "purchaseReceipt": "Penerimaan Pembelian",
+    "sale": "Penjualan",
+    "transferIn": "Transfer Masuk",
+    "transferOut": "Transfer Keluar",
+    "returnIn": "Retur Masuk",
+    "returnOut": "Retur Keluar",
+    "adjustmentIn": "Penyesuaian Masuk",
+    "adjustmentOut": "Penyesuaian Keluar",
+    "writeOff": "Write-off"
+  },
+  "access": {
+    "checkIn": "Check In",
+    "checkOut": "Check Out",
+    "warehouseAccessLog": "Log Akses Gudang",
+    "visitor": "Pengunjung",
+    "purpose": "Tujuan",
+    "enterTime": "Waktu Masuk",
+    "exitTime": "Waktu Keluar"
+  },
+  "import": {
+    "uploadPackingList": "Upload Packing List",
+    "uploadXeroQuotation": "Upload Quotation Xero",
+    "reviewMapping": "Tinjau Pemetaan SKU",
+    "mappedAuto": "Dipetakan Otomatis",
+    "needsReview": "Perlu Ditinjau",
+    "notFound": "SKU Tidak Ditemukan",
+    "confirmImport": "Konfirmasi Import",
+    "importSuccess": "Import berhasil — {count} item diproses"
+  },
+  "common": {
+    "save": "Simpan",
+    "cancel": "Batal",
+    "edit": "Edit",
+    "delete": "Hapus",
+    "confirm": "Konfirmasi",
+    "search": "Cari...",
+    "filter": "Filter",
+    "export": "Ekspor",
+    "print": "Cetak",
+    "loading": "Memuat...",
+    "noData": "Belum ada data",
+    "required": "Wajib diisi",
+    "language": "Bahasa",
+    "comingSoon": "Segera Hadir",
+    "underConstruction": "Fitur ini sedang dalam pengembangan dan akan segera tersedia."
+  }
+}
