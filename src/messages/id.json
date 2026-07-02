@@ -132,7 +132,27 @@
     "optional": "opsional",
     "manualEntry": "Input Manual",
     "recentIn": "Barang Masuk Terbaru",
-    "recentOut": "Barang Keluar Terbaru"
+    "recentOut": "Barang Keluar Terbaru",
+    "fromLocation": "Dari Lokasi",
+    "toLocation": "Ke Lokasi",
+    "sameLocation": "Lokasi asal dan tujuan tidak boleh sama.",
+    "submitTransfer": "Transfer",
+    "recentTransfers": "Transfer Terbaru"
+  },
+  "opname": {
+    "title": "Stock Opname",
+    "expected": "Jumlah Sistem",
+    "counted": "Jumlah Hitung",
+    "variance": "Selisih",
+    "saveCounts": "Simpan Hitungan",
+    "approve": "Setujui & Posting",
+    "approveHint": "Menyetujui akan membuat penyesuaian stok untuk semua selisih, lalu menutup sesi ini.",
+    "startOpname": "Mulai Opname",
+    "inProgress": "Berlangsung",
+    "completed": "Selesai",
+    "noSessions": "Belum ada sesi opname.",
+    "open": "Buka",
+    "progress": "Progres"
   },
   "auth": {
     "subtitle": "Sistem Manajemen Inventaris",

@@ -336,3 +336,106 @@ $$;
 
 REVOKE ALL ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean) FROM public, anon;
 GRANT EXECUTE ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean) TO authenticated, service_role;
+
+-- ------------------------------------------------------------
+-- TRANSFER & STOCK OPNAME functions (SECURITY DEFINER, called as the
+-- authenticated user — no service role required).
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION shop_recompute_level(p_variant uuid, p_location uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  INSERT INTO shop_stock_levels(variant_id, location_id, quantity_on_hand, quantity_reserved)
+  SELECT p_variant, p_location,
+    COALESCE(SUM(CASE WHEN movement_type IN ('purchase_receipt','transfer_in','return_in','adjustment_in')
+                 THEN quantity ELSE -quantity END), 0), 0
+  FROM shop_stock_movements WHERE variant_id = p_variant AND location_id = p_location
+  ON CONFLICT (variant_id, location_id)
+  DO UPDATE SET quantity_on_hand = EXCLUDED.quantity_on_hand, last_updated_at = NOW();
+END; $$;
+
+CREATE OR REPLACE FUNCTION shop_record_transfer(
+  p_variant uuid, p_from uuid, p_to uuid, p_qty int,
+  p_notes text DEFAULT NULL, p_allow_backorder boolean DEFAULT false
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_available int; v_ref uuid := gen_random_uuid();
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+  IF p_from = p_to THEN RAISE EXCEPTION 'same_location'; END IF;
+  IF NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+    FROM shop_stock_levels WHERE variant_id = p_variant AND location_id = p_from FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN
+      RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty;
+    END IF;
+  END IF;
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes)
+  VALUES (p_variant, p_from, p_to, 'transfer_out', p_qty, 'transfer_order', v_ref, p_notes);
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes)
+  VALUES (p_variant, p_to, p_from, 'transfer_in', p_qty, 'transfer_order', v_ref, p_notes);
+  PERFORM shop_recompute_level(p_variant, p_from);
+  PERFORM shop_recompute_level(p_variant, p_to);
+  RETURN v_ref;
+END; $$;
+
+CREATE OR REPLACE FUNCTION shop_create_opname(p_location uuid, p_user uuid DEFAULT NULL)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_session uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO shop_stock_opname_sessions(session_id, location_id, status, started_at, created_by)
+  VALUES (v_session, p_location, 'in_progress', NOW(), p_user);
+  INSERT INTO shop_stock_opname_lines(session_id, variant_id, expected_qty)
+  SELECT v_session, sl.variant_id, sl.quantity_on_hand
+  FROM shop_stock_levels sl WHERE sl.location_id = p_location;
+  RETURN v_session;
+END; $$;
+
+CREATE OR REPLACE FUNCTION shop_save_opname_counts(p_session uuid, p_counts jsonb)
+RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_count int;
+BEGIN
+  UPDATE shop_stock_opname_lines l
+  SET counted_qty = CASE
+        WHEN (p_counts ->> l.line_id::text) IS NULL OR (p_counts ->> l.line_id::text) = ''
+        THEN NULL ELSE (p_counts ->> l.line_id::text)::int END
+  WHERE l.session_id = p_session AND p_counts ? l.line_id::text;
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END; $$;
+
+CREATE OR REPLACE FUNCTION shop_apply_opname(p_session uuid, p_user uuid DEFAULT NULL)
+RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE r record; v_loc uuid; v_count int := 0; v_diff int; v_type text;
+BEGIN
+  SELECT location_id INTO v_loc FROM shop_stock_opname_sessions WHERE session_id = p_session FOR UPDATE;
+  IF v_loc IS NULL THEN RAISE EXCEPTION 'session_not_found'; END IF;
+  FOR r IN SELECT line_id, variant_id, expected_qty, counted_qty
+           FROM shop_stock_opname_lines WHERE session_id = p_session AND counted_qty IS NOT NULL
+  LOOP
+    v_diff := r.counted_qty - r.expected_qty;
+    IF v_diff <> 0 THEN
+      v_type := CASE WHEN v_diff > 0 THEN 'adjustment_in' ELSE 'adjustment_out' END;
+      INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, reference_type, reference_id, reason_code, notes)
+      VALUES (r.variant_id, v_loc, v_type, abs(v_diff), 'adjustment', p_session, 'stock_opname', 'Penyesuaian hasil stock opname');
+      PERFORM shop_recompute_level(r.variant_id, v_loc);
+      v_count := v_count + 1;
+    END IF;
+    UPDATE shop_stock_opname_lines SET is_approved = true WHERE line_id = r.line_id;
+  END LOOP;
+  UPDATE shop_stock_opname_sessions SET status = 'completed', completed_at = NOW(), approved_by = p_user WHERE session_id = p_session;
+  RETURN v_count;
+END; $$;
+
+DO $$
+DECLARE fn text;
+BEGIN
+  FOR fn IN SELECT unnest(ARRAY[
+    'shop_record_transfer(uuid,uuid,uuid,int,text,boolean)',
+    'shop_create_opname(uuid,uuid)',
+    'shop_save_opname_counts(uuid,jsonb)',
+    'shop_apply_opname(uuid,uuid)'
+  ]) LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM public, anon', fn);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', fn);
+  END LOOP;
+END $$;
