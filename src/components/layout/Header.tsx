@@ -4,6 +4,8 @@ import { Menu, QrCode, Bell } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { ThemeToggle } from "./ThemeToggle";
+import { Logo20FIT } from "./Logo20FIT";
 
 export function Header({ onMenu }: { onMenu: () => void }) {
   const t = useTranslations("dashboard");
@@ -16,6 +18,9 @@ export function Header({ onMenu }: { onMenu: () => void }) {
       >
         <Menu size={20} />
       </button>
+
+      {/* Logo shows in the top bar on mobile, where the sidebar is a drawer. */}
+      <Logo20FIT height={24} className="lg:hidden" />
 
       <div className="flex-1" />
 
@@ -32,6 +37,7 @@ export function Header({ onMenu }: { onMenu: () => void }) {
       >
         <Bell size={18} />
       </button>
+      <ThemeToggle />
       <LanguageSwitcher />
     </header>
   );

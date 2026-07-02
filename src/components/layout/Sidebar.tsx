@@ -6,6 +6,7 @@ import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
 import { LogoutButton } from "./LogoutButton";
+import { Logo20FIT } from "./Logo20FIT";
 
 export function Sidebar({
   open,
@@ -28,20 +29,16 @@ export function Sidebar({
         onClick={onClose}
         aria-hidden
       />
+      {/* `dark` scopes the sidebar to dark tokens so it stays dark in light mode
+          too (a common shell pattern — Linear, Vercel, Notion). */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border bg-surface transition-transform lg:static lg:translate-x-0",
+          "dark fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border bg-surface transition-transform lg:static lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex h-16 items-center gap-2.5 border-b border-border px-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-sm font-bold text-bg">
-            20
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-bold text-fg">20FIT Shop</div>
-            <div className="text-xs text-muted">Inventaris</div>
-          </div>
+          <Logo20FIT height={26} />
           <button
             onClick={onClose}
             className="ml-auto text-muted hover:text-fg lg:hidden"
