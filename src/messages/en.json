@@ -132,7 +132,27 @@
     "optional": "optional",
     "manualEntry": "Manual Entry",
     "recentIn": "Recent Goods In",
-    "recentOut": "Recent Goods Out"
+    "recentOut": "Recent Goods Out",
+    "fromLocation": "From Location",
+    "toLocation": "To Location",
+    "sameLocation": "Source and destination must be different.",
+    "submitTransfer": "Transfer",
+    "recentTransfers": "Recent Transfers"
+  },
+  "opname": {
+    "title": "Stock Opname",
+    "expected": "System Qty",
+    "counted": "Counted Qty",
+    "variance": "Variance",
+    "saveCounts": "Save Counts",
+    "approve": "Approve & Post",
+    "approveHint": "Approving creates stock adjustments for every variance, then closes this session.",
+    "startOpname": "Start Opname",
+    "inProgress": "In Progress",
+    "completed": "Completed",
+    "noSessions": "No opname sessions yet.",
+    "open": "Open",
+    "progress": "Progress"
   },
   "auth": {
     "subtitle": "Inventory Management System",

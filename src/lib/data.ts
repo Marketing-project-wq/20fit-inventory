@@ -221,3 +221,114 @@ export async function getDashboard(): Promise<DashboardData | null> {
     recent,
   };
 }
+
+// ----------------------------- Stock opname --------------------------------
+export type OpnameSession = {
+  session_id: string;
+  location_id: string;
+  location_name: string;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  line_count: number;
+  counted_count: number;
+};
+
+export type OpnameLine = {
+  line_id: string;
+  variant_id: string;
+  sku_code: string;
+  product_name: string;
+  expected_qty: number;
+  counted_qty: number | null;
+  variance: number | null;
+};
+
+export async function getOpnameSessions(): Promise<OpnameSession[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const [sessions, locations, lines] = await Promise.all([
+    sb
+      .from("shop_stock_opname_sessions")
+      .select("session_id,location_id,status,started_at,completed_at,created_at")
+      .order("created_at", { ascending: false }),
+    sb.from("shop_locations").select("location_id,name"),
+    sb.from("shop_stock_opname_lines").select("session_id,counted_qty"),
+  ]);
+  if (sessions.error) return null;
+
+  const locName = new Map((locations.data ?? []).map((l) => [l.location_id, l.name]));
+  const agg = new Map<string, { total: number; counted: number }>();
+  for (const l of lines.data ?? []) {
+    const a = agg.get(l.session_id) ?? { total: 0, counted: 0 };
+    a.total++;
+    if (l.counted_qty != null) a.counted++;
+    agg.set(l.session_id, a);
+  }
+  return (sessions.data ?? []).map((s) => ({
+    session_id: s.session_id,
+    location_id: s.location_id,
+    location_name: locName.get(s.location_id) ?? "—",
+    status: s.status,
+    started_at: s.started_at,
+    completed_at: s.completed_at,
+    line_count: agg.get(s.session_id)?.total ?? 0,
+    counted_count: agg.get(s.session_id)?.counted ?? 0,
+  }));
+}
+
+export async function getOpnameSession(
+  id: string,
+): Promise<{ session: OpnameSession; lines: OpnameLine[] } | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const [session, lines, variants, products, locations] = await Promise.all([
+    sb
+      .from("shop_stock_opname_sessions")
+      .select("session_id,location_id,status,started_at,completed_at")
+      .eq("session_id", id)
+      .maybeSingle(),
+    sb
+      .from("shop_stock_opname_lines")
+      .select("line_id,variant_id,expected_qty,counted_qty,variance")
+      .eq("session_id", id),
+    sb.from("shop_product_variants").select("variant_id,product_id,sku_code"),
+    sb.from("shop_products").select("product_id,name"),
+    sb.from("shop_locations").select("location_id,name"),
+  ]);
+  if (session.error || !session.data) return null;
+
+  const productById = new Map((products.data ?? []).map((p) => [p.product_id, p.name]));
+  const variantById = new Map((variants.data ?? []).map((v) => [v.variant_id, v]));
+  const locName = new Map((locations.data ?? []).map((l) => [l.location_id, l.name]));
+
+  const outLines: OpnameLine[] = (lines.data ?? [])
+    .map((l) => {
+      const v = variantById.get(l.variant_id);
+      return {
+        line_id: l.line_id,
+        variant_id: l.variant_id,
+        sku_code: v?.sku_code ?? "—",
+        product_name: v ? (productById.get(v.product_id) ?? "—") : "—",
+        expected_qty: l.expected_qty,
+        counted_qty: l.counted_qty,
+        variance: l.variance,
+      };
+    })
+    .sort((a, b) => a.product_name.localeCompare(b.product_name));
+
+  const s = session.data;
+  return {
+    session: {
+      session_id: s.session_id,
+      location_id: s.location_id,
+      location_name: locName.get(s.location_id) ?? "—",
+      status: s.status,
+      started_at: s.started_at,
+      completed_at: s.completed_at,
+      line_count: outLines.length,
+      counted_count: outLines.filter((l) => l.counted_qty != null).length,
+    },
+    lines: outLines,
+  };
+}
