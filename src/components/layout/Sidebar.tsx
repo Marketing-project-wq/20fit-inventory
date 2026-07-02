@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
+import { LogoutButton } from "./LogoutButton";
 
 export function Sidebar({
   open,
@@ -73,8 +74,9 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="border-t border-border p-3 text-xs text-dim">
-          v0.2 · PRD v1.4
+        <div className="border-t border-border p-3">
+          <LogoutButton />
+          <div className="mt-2 px-3 text-xs text-dim">v0.3 · PRD v1.4</div>
         </div>
       </aside>
     </>

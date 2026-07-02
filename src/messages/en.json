@@ -133,5 +133,15 @@
     "manualEntry": "Manual Entry",
     "recentIn": "Recent Goods In",
     "recentOut": "Recent Goods Out"
+  },
+  "auth": {
+    "subtitle": "Inventory Management System",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign In",
+    "logout": "Log Out",
+    "invalidCredentials": "Invalid email or password.",
+    "notConfigured": "Authentication is not configured on the server.",
+    "invalidInput": "Invalid input."
   }
 }

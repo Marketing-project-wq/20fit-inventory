@@ -133,5 +133,15 @@
     "manualEntry": "Input Manual",
     "recentIn": "Barang Masuk Terbaru",
     "recentOut": "Barang Keluar Terbaru"
+  },
+  "auth": {
+    "subtitle": "Sistem Manajemen Inventaris",
+    "email": "Email",
+    "password": "Kata Sandi",
+    "signIn": "Masuk",
+    "logout": "Keluar",
+    "invalidCredentials": "Email atau kata sandi salah.",
+    "notConfigured": "Autentikasi belum dikonfigurasi di server.",
+    "invalidInput": "Isian tidak valid."
   }
 }
