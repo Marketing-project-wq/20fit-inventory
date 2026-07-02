@@ -186,5 +186,24 @@
     "invalidCredentials": "Email atau kata sandi salah.",
     "notConfigured": "Autentikasi belum dikonfigurasi di server.",
     "invalidInput": "Isian tidak valid."
+  },
+  "scan": {
+    "title": "Scan QR / Barcode",
+    "subtitle": "Arahkan kamera ke QR code produk untuk melihat stok secara langsung.",
+    "instruction": "Ketuk Mulai Scan, lalu arahkan kamera ke QR code atau barcode pada produk.",
+    "start": "Mulai Scan",
+    "retry": "Coba Lagi",
+    "scanning": "Memindai...",
+    "stop": "Hentikan",
+    "stockByLocation": "Stok per Lokasi",
+    "receive": "Terima",
+    "issue": "Keluarkan",
+    "detail": "Detail",
+    "notFound": "SKU tidak ditemukan",
+    "notFoundHint": "Kode \"{code}\" tidak cocok dengan produk mana pun.",
+    "lookupError": "Gagal memuat data. Coba scan lagi.",
+    "unauthorized": "Sesi berakhir. Silakan masuk kembali.",
+    "cameraError": "Tidak dapat mengakses kamera. Pastikan izin kamera telah diberikan.",
+    "scanAgain": "Scan Lagi"
   }
 }

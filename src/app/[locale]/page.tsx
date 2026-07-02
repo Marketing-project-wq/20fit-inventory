@@ -67,7 +67,7 @@ export default async function DashboardPage() {
   const actions: { label: string; href: string; icon: LucideIcon }[] = [
     { label: t("receiveGoods"), href: "/barang-masuk", icon: ArrowDownToLine },
     { label: t("issueGoods"), href: "/barang-keluar", icon: ArrowUpFromLine },
-    { label: t("scanQR"), href: "/produk", icon: QrCode },
+    { label: t("scanQR"), href: "/scan", icon: QrCode },
     { label: t("startOpname"), href: "/stock-opname", icon: ClipboardCheck },
   ];
 

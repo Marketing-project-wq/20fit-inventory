@@ -186,5 +186,24 @@
     "invalidCredentials": "Invalid email or password.",
     "notConfigured": "Authentication is not configured on the server.",
     "invalidInput": "Invalid input."
+  },
+  "scan": {
+    "title": "Scan QR / Barcode",
+    "subtitle": "Point the camera at a product QR code to see live stock.",
+    "instruction": "Tap Start Scan, then point the camera at the QR code or barcode on the product.",
+    "start": "Start Scan",
+    "retry": "Try Again",
+    "scanning": "Scanning...",
+    "stop": "Stop",
+    "stockByLocation": "Stock by Location",
+    "receive": "Receive",
+    "issue": "Issue",
+    "detail": "Detail",
+    "notFound": "SKU not found",
+    "notFoundHint": "Code \"{code}\" does not match any product.",
+    "lookupError": "Failed to load data. Please scan again.",
+    "unauthorized": "Session expired. Please sign in again.",
+    "cameraError": "Cannot access the camera. Please make sure camera permission is granted.",
+    "scanAgain": "Scan Again"
   }
 }
