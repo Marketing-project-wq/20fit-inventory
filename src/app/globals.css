@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * 20FIT Shop Inventory — design system (PRD Fase 3)
+ * Dark, professional warehouse UI. Orange accent consistent with 20FIT brand.
+ * Tailwind v4 CSS-based theme: these tokens generate utilities like
+ * bg-surface, text-accent, border-border, text-muted, etc.
+ */
+@theme {
+  --color-bg: #0f1117; /* near-black app background */
+  --color-surface: #1a1d27; /* card background */
+  --color-surface-2: #22263a; /* hover / secondary surface */
+  --color-border: #2d3148; /* subtle border */
+
+  --color-accent: #ff6b2b; /* orange — 20FIT brand */
+  --color-accent-dim: #ff6b2b22; /* accent background wash */
+
+  --color-success: #2dd4bf; /* teal — stock OK / inbound */
+  --color-warning: #f59e0b; /* amber — low stock */
+  --color-danger: #ef4444; /* red — out of stock / write-off */
+
+  --color-fg: #e8e9f0; /* primary text */
+  --color-muted: #6b7280; /* secondary text */
+  --color-dim: #374151; /* disabled / placeholder */
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas,
+    monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
+
+/* SKU codes are the most important element in a warehouse UI — always mono + accent. */
+.sku {
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+  letter-spacing: -0.01em;
+}
+
+/* Thin, dark scrollbars to match the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }

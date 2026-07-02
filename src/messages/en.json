@@ -1,0 +1,108 @@
+{
+  "app": {
+    "name": "20FIT Shop",
+    "shortName": "20FIT Inventory",
+    "tagline": "Inventory Management System"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "products": "Products & SKUs",
+    "stock": "Stock Levels",
+    "goodsIn": "Goods In",
+    "goodsOut": "Goods Out",
+    "movements": "Stock Movements",
+    "transfer": "Transfer",
+    "stockOpname": "Stock Opname",
+    "warehouseAccess": "Warehouse Access",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Overview of 20FIT Shop inventory health",
+    "totalInventoryValue": "Total Inventory Value",
+    "belowReorder": "SKUs Below Reorder",
+    "outOfStock": "Out of Stock",
+    "openPurchaseOrders": "Open POs",
+    "lowStockWatchlist": "Low Stock Watchlist",
+    "recentMovements": "Recent Movements",
+    "quickActions": "Quick Actions",
+    "receiveGoods": "Receive Goods",
+    "issueGoods": "Issue Goods",
+    "scanQR": "Scan QR",
+    "startOpname": "Stock Opname",
+    "connectNotice": "Inventory data will appear once the Supabase database is connected."
+  },
+  "product": {
+    "skuCode": "SKU Code",
+    "productName": "Product Name",
+    "brand": "Brand",
+    "category": "Category",
+    "costPrice": "Cost Price",
+    "sellingPrice": "Selling Price",
+    "stockOnHand": "Stock on Hand",
+    "reorderPoint": "Reorder Point",
+    "qrCode": "QR Code / Barcode",
+    "downloadQR": "Download QR Code",
+    "scanQR": "Scan QR / Barcode"
+  },
+  "stock": {
+    "inStock": "In Stock",
+    "lowStock": "Low Stock",
+    "outOfStock": "Out of Stock",
+    "critical": "Critical",
+    "openingStock": "Opening Stock",
+    "closingStock": "Closing Stock",
+    "goodsIn": "Goods In",
+    "goodsOut": "Goods Out",
+    "offline": "Offline",
+    "online": "Online / Marketplace"
+  },
+  "movement": {
+    "purchaseReceipt": "Purchase Receipt",
+    "sale": "Sale",
+    "transferIn": "Transfer In",
+    "transferOut": "Transfer Out",
+    "returnIn": "Return In",
+    "returnOut": "Return Out",
+    "adjustmentIn": "Adjustment In",
+    "adjustmentOut": "Adjustment Out",
+    "writeOff": "Write-off"
+  },
+  "access": {
+    "checkIn": "Check In",
+    "checkOut": "Check Out",
+    "warehouseAccessLog": "Warehouse Access Log",
+    "visitor": "Visitor",
+    "purpose": "Purpose",
+    "enterTime": "Entry Time",
+    "exitTime": "Exit Time"
+  },
+  "import": {
+    "uploadPackingList": "Upload Packing List",
+    "uploadXeroQuotation": "Upload Xero Quotation",
+    "reviewMapping": "Review SKU Mapping",
+    "mappedAuto": "Auto-mapped",
+    "needsReview": "Needs Review",
+    "notFound": "SKU Not Found",
+    "confirmImport": "Confirm Import",
+    "importSuccess": "Import successful — {count} items processed"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "search": "Search...",
+    "filter": "Filter",
+    "export": "Export",
+    "print": "Print",
+    "loading": "Loading...",
+    "noData": "No data yet",
+    "required": "Required",
+    "language": "Language",
+    "comingSoon": "Coming Soon",
+    "underConstruction": "This feature is under development and will be available soon."
+  }
+}
