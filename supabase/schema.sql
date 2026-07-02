@@ -426,6 +426,30 @@ BEGIN
   RETURN v_count;
 END; $$;
 
+-- ------------------------------------------------------------
+-- PACKING LIST IMPORT: bulk goods-in from a supplier packing list. Records one
+-- purchase_receipt movement per item, atomically, reusing shop_record_movement.
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION shop_import_packing_list(
+  p_location uuid,
+  p_items jsonb,
+  p_reference text DEFAULT NULL
+) RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_item jsonb; v_count int := 0;
+BEGIN
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM shop_record_movement(
+      (v_item->>'variant_id')::uuid, p_location, 'purchase_receipt',
+      (v_item->>'quantity')::int, NULLIF(v_item->>'unit_cost','')::numeric,
+      'packing_list', NULL, NULL, NULL, p_reference, false);
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END; $$;
+
 DO $$
 DECLARE fn text;
 BEGIN
@@ -433,7 +457,8 @@ BEGIN
     'shop_record_transfer(uuid,uuid,uuid,int,text,boolean)',
     'shop_create_opname(uuid,uuid)',
     'shop_save_opname_counts(uuid,jsonb)',
-    'shop_apply_opname(uuid,uuid)'
+    'shop_apply_opname(uuid,uuid)',
+    'shop_import_packing_list(uuid,jsonb,text)'
   ]) LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM public, anon', fn);
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', fn);
