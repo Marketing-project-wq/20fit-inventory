@@ -1,53 +1,100 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
- * 20FIT Shop Inventory — design system (PRD Fase 3)
- * Dark, professional warehouse UI. Orange accent consistent with 20FIT brand.
- * Tailwind v4 CSS-based theme: these tokens generate utilities like
- * bg-surface, text-accent, border-border, text-muted, etc.
+ * 20FIT Shop Inventory — design system (PRD Fase 3), light + dark mode.
+ * Brand red #BF0000 (verified from logo pixel analysis; replaces the old orange).
+ *
+ * Tailwind v4: semantic runtime variables (--bg, --surface, --accent…) switch by
+ * the .dark / .light class next-themes sets on <html>. `@theme inline` maps the
+ * Tailwind color tokens onto them, so every existing utility (bg-surface,
+ * text-accent, border-border, …) responds to the active theme with no edits.
  */
+
+/* Dark mode (default) — also the scope used for the always-dark sidebar. */
+:root,
+.dark {
+  color-scheme: dark;
+
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface-2: #22263a;
+  --border: #2d3148;
+
+  --accent: #bf0000;
+  --accent-dim: rgba(191, 0, 0, 0.16);
+
+  --success: #2dd4bf;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  --fg: #e8e9f0;
+  --muted: #6b7280;
+  --dim: #374151;
+}
+
+/* Light mode. */
+.light {
+  color-scheme: light;
+
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-2: #f0f2f8;
+  --border: #e2e5f0;
+
+  --accent: #bf0000;
+  --accent-dim: rgba(191, 0, 0, 0.08);
+
+  --success: #0d9488;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  --fg: #111827;
+  --muted: #4b5563;
+  --dim: #9ca3af;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+}
+
 @theme {
-  --color-bg: #0f1117; /* near-black app background */
-  --color-surface: #1a1d27; /* card background */
-  --color-surface-2: #22263a; /* hover / secondary surface */
-  --color-border: #2d3148; /* subtle border */
-
-  --color-accent: #ff6b2b; /* orange — 20FIT brand */
-  --color-accent-dim: #ff6b2b22; /* accent background wash */
-
-  --color-success: #2dd4bf; /* teal — stock OK / inbound */
-  --color-warning: #f59e0b; /* amber — low stock */
-  --color-danger: #ef4444; /* red — out of stock / write-off */
-
-  --color-fg: #e8e9f0; /* primary text */
-  --color-muted: #6b7280; /* secondary text */
-  --color-dim: #374151; /* disabled / placeholder */
-
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas,
     monospace;
 }
 
-html {
-  color-scheme: dark;
-}
-
 body {
-  background-color: var(--color-bg);
-  color: var(--color-fg);
+  background-color: var(--bg);
+  color: var(--fg);
   font-family: var(--font-sans);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 /* SKU codes are the most important element in a warehouse UI — always mono + accent. */
 .sku {
   font-family: var(--font-mono);
-  color: var(--color-accent);
+  color: var(--accent);
   letter-spacing: -0.01em;
 }
 
-/* Thin, dark scrollbars to match the theme. */
+/* Thin scrollbars that match the active theme. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--border) transparent;
 }
