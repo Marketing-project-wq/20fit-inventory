@@ -77,7 +77,21 @@
     "visitor": "Pengunjung",
     "purpose": "Tujuan",
     "enterTime": "Waktu Masuk",
-    "exitTime": "Waktu Keluar"
+    "exitTime": "Waktu Keluar",
+    "newVisit": "Catat Kunjungan",
+    "currentlyInside": "Sedang di Dalam",
+    "history": "Riwayat Akses",
+    "visitorName": "Nama Pengunjung",
+    "visitorPlaceholder": "Nama lengkap",
+    "purposeHint": "opsional",
+    "purposePlaceholder": "mis. Pengiriman, Audit stok, Maintenance",
+    "checkedIn": "Berhasil check-in.",
+    "noneInside": "Tidak ada orang di dalam gudang saat ini.",
+    "noHistory": "Belum ada riwayat akses.",
+    "inside": "Di Dalam",
+    "duration": "Durasi",
+    "hoursShort": "j",
+    "minutesShort": "m"
   },
   "import": {
     "uploadPackingList": "Upload Packing List",

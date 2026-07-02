@@ -191,6 +191,51 @@ export async function approveOpname(formData: FormData): Promise<void> {
   redirect(`/${locale}/stock-opname/${session_id}`);
 }
 
+// ------------------------- Warehouse access log ----------------------------
+const checkInSchema = z.object({
+  location_id: z.string().uuid(),
+  visitor_name: z.string().trim().min(1).max(200),
+  purpose: z.string().trim().max(300).optional(),
+  notes: z.string().trim().max(500).optional(),
+});
+
+export async function checkInAccess(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { sb, user, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  const parsed = checkInSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+
+  const { error } = await sb!.from("shop_warehouse_access_log").insert({
+    location_id: d.location_id,
+    visitor_name: d.visitor_name,
+    purpose: d.purpose || null,
+    notes: d.notes || null,
+    user_id: user!.id,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "checked_in" };
+}
+
+export async function checkOutAccess(formData: FormData): Promise<void> {
+  const locale = String(formData.get("locale") ?? "id");
+  const log_id = String(formData.get("log_id") ?? "");
+  const { sb, error } = await getAuthedClient();
+  if (!error && log_id) {
+    await sb!
+      .from("shop_warehouse_access_log")
+      .update({ check_out_at: new Date().toISOString() })
+      .eq("log_id", log_id)
+      .is("check_out_at", null);
+    revalidatePath("/", "layout");
+  }
+  redirect(`/${locale}/akses-gudang`);
+}
+
 // --------------------------------- Auth ------------------------------------
 export async function signIn(
   _prev: ActionState,
