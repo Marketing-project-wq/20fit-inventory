@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Real inventory source data & generated output (contains real client names) — never commit
+*.xlsx
+supabase/seed_from_excel.sql
+scripts/unmapped_products.txt
+unmapped_products.txt
