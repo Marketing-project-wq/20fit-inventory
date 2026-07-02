@@ -34,6 +34,7 @@ export type Cols = {
   qty: number | null;
   cartons: number | null;
   per: number | null;
+  price: number | null;
 };
 
 /** Lowercase, strip every non-alphanumeric char (no spaces) — for header/code matching. */
@@ -66,6 +67,7 @@ export function num(v: unknown): number {
 // generic quantity column.
 const HEAD: Record<keyof Cols, string[]> = {
   code: [
+    "inventoryitemcode",
     "itemno",
     "itemcode",
     "artno",
@@ -117,18 +119,44 @@ const HEAD: Record<keyof Cols, string[]> = {
     "totalunit",
     "units",
   ],
+  // Unit price (Xero "UnitAmount"); deliberately avoids bare "amount" so it
+  // won't grab a LineAmount / TotalAmount column.
+  price: [
+    "unitamount",
+    "unitprice",
+    "priceeach",
+    "unitcost",
+    "hargasatuan",
+    "rate",
+    "price",
+    "harga",
+  ],
 };
 
 function headMatch(cell: unknown, keywords: string[]): boolean {
   const h = compact(cell);
   if (!h) return false;
-  return keywords.some((k) => k.length > 0 && h.includes(k));
+  const toks = new Set(normalize(cell).split(" ").filter(Boolean));
+  return keywords.some((k) => {
+    if (!k) return false;
+    // Long keywords are safe to match anywhere; short/ambiguous ones (e.g. "ctn",
+    // "sku", "qty") require a boundary so "ctn" doesn't match "contactname".
+    if (k.length >= 5) return h.includes(k);
+    return h === k || h.startsWith(k) || toks.has(k);
+  });
 }
 
 function assign(headerRow: unknown[]): Cols {
-  const cols: Cols = { code: null, name: null, cartons: null, per: null, qty: null };
+  const cols: Cols = {
+    code: null,
+    name: null,
+    cartons: null,
+    per: null,
+    qty: null,
+    price: null,
+  };
   const used = new Set<number>();
-  const order: (keyof Cols)[] = ["code", "name", "cartons", "per", "qty"];
+  const order: (keyof Cols)[] = ["code", "name", "cartons", "per", "qty", "price"];
   for (const cat of order) {
     for (let c = 0; c < headerRow.length; c++) {
       if (used.has(c)) continue;
@@ -191,12 +219,13 @@ export function extractRows(
     if (q === 0 && cols.cartons != null && cols.per != null) {
       q = num(row[cols.cartons]) * num(row[cols.per]);
     }
+    const price = cols.price != null ? num(row[cols.price]) : 0;
     out.push({
       line: i + 1,
       raw_code: rawCode || null,
       raw_name: rawName || rawCode,
       quantity: Math.max(0, Math.round(q)),
-      unit_cost: null,
+      unit_cost: price > 0 ? price : null,
     });
   }
   return out;
