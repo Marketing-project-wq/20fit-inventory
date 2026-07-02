@@ -103,6 +103,15 @@
     "required": "Wajib diisi",
     "language": "Bahasa",
     "comingSoon": "Segera Hadir",
-    "underConstruction": "Fitur ini sedang dalam pengembangan dan akan segera tersedia."
+    "underConstruction": "Fitur ini sedang dalam pengembangan dan akan segera tersedia.",
+    "status": "Status",
+    "type": "Tipe",
+    "date": "Tanggal",
+    "quantity": "Jumlah",
+    "location": "Lokasi",
+    "channel": "Kanal",
+    "notes": "Catatan",
+    "reserved": "Dipesan",
+    "available": "Tersedia"
   }
 }

@@ -103,6 +103,15 @@
     "required": "Required",
     "language": "Language",
     "comingSoon": "Coming Soon",
-    "underConstruction": "This feature is under development and will be available soon."
+    "underConstruction": "This feature is under development and will be available soon.",
+    "status": "Status",
+    "type": "Type",
+    "date": "Date",
+    "quantity": "Quantity",
+    "location": "Location",
+    "channel": "Channel",
+    "notes": "Notes",
+    "reserved": "Reserved",
+    "available": "Available"
   }
 }
