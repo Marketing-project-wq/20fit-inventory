@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ActionState = {
@@ -262,4 +263,69 @@ export async function signOut(formData: FormData): Promise<void> {
   const sb = await createSupabaseServerClient();
   if (sb) await sb.auth.signOut();
   redirect(`/${locale}/login`);
+}
+
+/** Build the app's public origin from the incoming request (works behind the
+ *  Railway proxy), falling back to NEXT_PUBLIC_APP_URL. */
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (host) {
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    return `${proto}://${host}`;
+  }
+  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+const emailSchema = z.string().trim().email();
+
+/**
+ * Send a password-reset email. The link returns the user to /auth/callback,
+ * which exchanges the code for a session and forwards to /reset-sandi.
+ * Always reports success so we don't leak which emails are registered.
+ */
+export async function requestPasswordReset(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const locale = String(formData.get("locale") ?? "id");
+  const parsed = emailSchema.safeParse(formData.get("email"));
+  if (!parsed.success) return { ok: false, error: "email_invalid" };
+
+  const sb = await createSupabaseServerClient();
+  if (!sb) return { ok: false, error: "not_configured" };
+
+  const origin = await requestOrigin();
+  const next = encodeURIComponent(`/${locale}/reset-sandi`);
+  await sb.auth.resetPasswordForEmail(parsed.data, {
+    redirectTo: `${origin}/${locale}/auth/callback?next=${next}`,
+  });
+  // Do not reveal whether the address exists.
+  return { ok: true, message: "reset_sent" };
+}
+
+/**
+ * Set a new password using the recovery session established by the reset link.
+ * Signs the user out afterwards so they log in fresh with the new password.
+ */
+export async function updatePassword(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8) return { ok: false, error: "password_short" };
+  if (password !== confirm) return { ok: false, error: "password_mismatch" };
+
+  const sb = await createSupabaseServerClient();
+  if (!sb) return { ok: false, error: "not_configured" };
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
+  if (!user) return { ok: false, error: "session_missing" };
+
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) return { ok: false, error: "update_failed" };
+  await sb.auth.signOut();
+  return { ok: true, message: "password_updated" };
 }
