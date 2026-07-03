@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { PenLine, FileSpreadsheet } from "lucide-react";
 import { StockInForm } from "@/components/forms/StockInForm";
 import { PackingListImport } from "@/components/import/PackingListImport";
+import { RecentMovements } from "@/components/movements/RecentMovements";
+import type { Movement } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 type Opt = { variant_id: string; sku_code: string; product_name: string };
@@ -19,9 +21,11 @@ const triggerCls = cn(
 export function BarangMasukTabs({
   skus,
   locations,
+  recent,
 }: {
   skus: Opt[];
   locations: Loc[];
+  recent: Movement[];
 }) {
   const tf = useTranslations("form");
   const ti = useTranslations("import");
@@ -39,8 +43,12 @@ export function BarangMasukTabs({
         </Tabs.Trigger>
       </Tabs.List>
 
-      <Tabs.Content value="manual" className="max-w-xl focus:outline-none">
+      <Tabs.Content
+        value="manual"
+        className="grid gap-6 focus:outline-none lg:grid-cols-2"
+      >
         <StockInForm skus={skus} locations={locations} />
+        <RecentMovements movements={recent} direction="in" />
       </Tabs.Content>
       <Tabs.Content value="packing" className="focus:outline-none">
         <PackingListImport skus={skus} locations={locations} />
