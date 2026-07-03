@@ -15,21 +15,21 @@ import {
 } from "lucide-react";
 import {
   parsePackingList,
-  importPackingList,
+  parsePackingListMapped,
 } from "@/lib/import-actions";
-import { matchRows, type MatchedRow, type SkuLite } from "@/lib/import";
+import { importPackingList } from "@/lib/import-actions";
+import type { MatchedRow, SkuLite } from "@/lib/import";
 import { cn } from "@/lib/utils";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
 
 type Loc = { location_id: string; name: string };
-type Step = "upload" | "review" | "done";
+type Step = "upload" | "mapping" | "review" | "done";
 
 const ERROR_KEYS: Record<string, string> = {
   no_file: "errNoFile",
   too_large: "errTooLarge",
   parse_failed: "errParseFailed",
   empty: "errParseFailed",
-  no_columns: "errNoColumns",
   no_rows: "errNoRows",
   unauthorized: "errUnauthorized",
   not_configured: "errNotConfigured",
@@ -58,20 +58,35 @@ export function PackingListImport({
   const tc = useTranslations("common");
   const tf = useTranslations("form");
 
+  const defaultLoc =
+    locations.find((l) => /kuningan/i.test(l.name))?.location_id ??
+    locations[0]?.location_id ??
+    "";
+
   const [step, setStep] = useState<Step>("upload");
   const [rows, setRows] = useState<MatchedRow[]>([]);
-  const [locationId, setLocationId] = useState(locations[0]?.location_id ?? "");
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [nameCol, setNameCol] = useState<string>("");
+  const [qtyCol, setQtyCol] = useState<string>("");
+  const [locationId, setLocationId] = useState(defaultLoc);
   const [reference, setReference] = useState("");
   const [fileName, setFileName] = useState("");
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const [pending, startTransition] = useTransition();
-
   const fileRef = useRef<HTMLInputElement>(null);
 
   const errMsg = (code: string | null) =>
     code ? t(ERROR_KEYS[code] ?? "errGeneric") : null;
+
+  function currentFileForm(): FormData | null {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return null;
+    const fd = new FormData();
+    fd.append("file", file);
+    return fd;
+  }
 
   function handleParse(e: React.FormEvent) {
     e.preventDefault();
@@ -81,6 +96,7 @@ export function PackingListImport({
       return;
     }
     setError(null);
+    setFileName(file.name);
     const fd = new FormData();
     fd.append("file", file);
     startTransition(async () => {
@@ -89,8 +105,41 @@ export function PackingListImport({
         setError(res.error);
         return;
       }
-      setRows(matchRows(res.rows, skus));
-      setFileName(file.name);
+      if (res.needsMapping) {
+        setHeaders(res.headers);
+        setNameCol(res.autoName != null ? String(res.autoName) : "");
+        setQtyCol(res.autoQty != null ? String(res.autoQty) : "");
+        setStep("mapping");
+        return;
+      }
+      setRows(res.rows);
+      setTruncated(res.truncated);
+      setStep("review");
+    });
+  }
+
+  function applyMapping() {
+    if (nameCol === "" || qtyCol === "") {
+      setError("invalid_input");
+      return;
+    }
+    const fd = currentFileForm();
+    if (!fd) {
+      setError("no_file");
+      setStep("upload");
+      return;
+    }
+    fd.append("name_col", nameCol);
+    fd.append("qty_col", qtyCol);
+    setError(null);
+    startTransition(async () => {
+      const res = await parsePackingListMapped(fd);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      if (res.needsMapping) return; // shouldn't happen with explicit columns
+      setRows(res.rows);
       setTruncated(res.truncated);
       setStep("review");
     });
@@ -118,7 +167,7 @@ export function PackingListImport({
       matched_sku: s.sku_code,
       matched_name: s.product_name,
       status: "matched",
-      include: rows[i]?.quantity > 0,
+      include: (rows[i]?.quantity ?? 0) > 0,
     });
   }
 
@@ -147,6 +196,7 @@ export function PackingListImport({
         variant_id: r.variant_id as string,
         quantity: r.quantity,
         unit_cost: r.unit_cost,
+        description: r.raw_name,
       }));
     if (items.length === 0) {
       setError("nothing_selected");
@@ -160,7 +210,7 @@ export function PackingListImport({
     startTransition(async () => {
       const res = await importPackingList({
         location_id: locationId,
-        reference: reference.trim() || undefined,
+        reference: reference.trim() || `Import packing list — ${fileName}`,
         items,
       });
       if (!res.ok) {
@@ -174,6 +224,9 @@ export function PackingListImport({
 
   function reset() {
     setRows([]);
+    setHeaders([]);
+    setNameCol("");
+    setQtyCol("");
     setReference("");
     setFileName("");
     setTruncated(false);
@@ -186,14 +239,9 @@ export function PackingListImport({
   // --------------------------------- Upload --------------------------------
   if (step === "upload") {
     return (
-      <form
-        onSubmit={handleParse}
-        className="mx-auto max-w-lg space-y-5 rounded-xl border border-border bg-surface p-6"
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-dim">
-            <FileSpreadsheet className="text-accent" size={20} />
-          </span>
+      <form onSubmit={handleParse} className="max-w-lg space-y-5">
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-bg/40 p-3">
+          <FileSpreadsheet className="mt-0.5 shrink-0 text-accent" size={18} />
           <p className="text-sm text-muted">{t("subtitle")}</p>
         </div>
 
@@ -224,10 +272,73 @@ export function PackingListImport({
     );
   }
 
+  // ------------------------------- Column map ------------------------------
+  if (step === "mapping") {
+    return (
+      <div className="max-w-lg space-y-5">
+        <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>{t("mapHint")}</span>
+        </div>
+
+        <Field label={t("colName")}>
+          <select
+            value={nameCol}
+            onChange={(e) => setNameCol(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">{t("selectColumn")}</option>
+            {headers.map((h, i) => (
+              <option key={i} value={i}>
+                {h || `#${i + 1}`}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label={t("colQty")}>
+          <select
+            value={qtyCol}
+            onChange={(e) => setQtyCol(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">{t("selectColumn")}</option>
+            {headers.map((h, i) => (
+              <option key={i} value={i}>
+                {h || `#${i + 1}`}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {error && <Alert tone="danger">{errMsg(error)}</Alert>}
+
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={reset}
+            disabled={pending}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-accent hover:text-fg disabled:opacity-50"
+          >
+            <ArrowLeft size={16} />
+            {tc("cancel")}
+          </button>
+          <button
+            onClick={applyMapping}
+            disabled={pending || nameCol === "" || qtyCol === ""}
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+          >
+            {pending ? <Loader2 size={16} className="animate-spin" /> : null}
+            {t("applyMapping")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---------------------------------- Done ---------------------------------
   if (step === "done") {
     return (
-      <div className="mx-auto max-w-lg space-y-5 rounded-xl border border-border bg-surface p-8 text-center">
+      <div className="max-w-lg space-y-5 rounded-xl border border-border bg-surface p-8 text-center">
         <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/15">
           <PackageCheck className="text-success" size={28} />
         </span>
@@ -251,7 +362,6 @@ export function PackingListImport({
   // --------------------------------- Review --------------------------------
   return (
     <div className="space-y-5">
-      {/* Controls */}
       <div className="rounded-xl border border-border bg-surface p-5">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
           <FileSpreadsheet size={16} className="text-accent" />
@@ -304,7 +414,6 @@ export function PackingListImport({
       {truncated && <Alert tone="danger">{t("truncated")}</Alert>}
       <p className="text-xs text-muted">{t("reviewHint")}</p>
 
-      {/* Rows */}
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-surface-2 text-left text-xs text-muted">

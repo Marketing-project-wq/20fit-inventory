@@ -306,6 +306,31 @@ export function matchRows(parsed: ParsedRow[], skus: SkuLite[]): MatchedRow[] {
   });
 }
 
+/**
+ * Match packing-list rows: a learned mapping (exact source_description) wins and
+ * is auto-included; otherwise fall back to the generic code/name/fuzzy matcher.
+ */
+export function matchPacking(
+  items: ParsedRow[],
+  mappingByDesc: Map<string, SkuLite>,
+  skus: SkuLite[],
+): MatchedRow[] {
+  return items.map((row) => {
+    const mapped = mappingByDesc.get(normalize(row.raw_name));
+    if (mapped) {
+      return {
+        ...row,
+        variant_id: mapped.variant_id,
+        matched_sku: mapped.sku_code,
+        matched_name: mapped.product_name,
+        status: "matched",
+        include: row.quantity > 0,
+      };
+    }
+    return matchRows([row], skus)[0];
+  });
+}
+
 /** Best fuzzy SKU for a free-text name (token overlap). Null below `min`. */
 export function fuzzyBestVariant(
   text: string,
