@@ -86,7 +86,7 @@ export default async function DashboardPage() {
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-xl border border-border bg-surface p-5">
             <div className="flex items-center justify-between">
