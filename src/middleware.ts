@@ -46,8 +46,17 @@ export async function middleware(request: NextRequest) {
     ? seg
     : routing.defaultLocale;
   const isLoginPage = pathname === `/${locale}/login`;
+  // Auth screens reachable without a session: sign-in, the password-reset
+  // request/confirm pages, and the callback that exchanges the reset code.
+  const publicAuthPaths = new Set([
+    `/${locale}/login`,
+    `/${locale}/lupa-sandi`,
+    `/${locale}/reset-sandi`,
+    `/${locale}/auth/callback`,
+  ]);
+  const isPublic = publicAuthPaths.has(pathname);
 
-  if (!user && !isLoginPage) {
+  if (!user && !isPublic) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = `/${locale}/login`;
     redirectUrl.searchParams.set("next", pathname);
