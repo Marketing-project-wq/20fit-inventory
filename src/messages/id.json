@@ -206,7 +206,11 @@
     "channel": "Kanal",
     "notes": "Catatan",
     "reserved": "Dipesan",
-    "available": "Tersedia"
+    "available": "Tersedia",
+    "all": "Semua",
+    "sortBy": "Urutkan",
+    "resetFilters": "Reset filter",
+    "showing": "Menampilkan {count} dari {total} data"
   },
   "form": {
     "sku": "SKU",

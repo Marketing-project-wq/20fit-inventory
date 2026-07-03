@@ -206,7 +206,11 @@
     "channel": "Channel",
     "notes": "Notes",
     "reserved": "Reserved",
-    "available": "Available"
+    "available": "Available",
+    "all": "All",
+    "sortBy": "Sort",
+    "resetFilters": "Reset filters",
+    "showing": "Showing {count} of {total}"
   },
   "form": {
     "sku": "SKU",
