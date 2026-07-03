@@ -1,73 +1,66 @@
+"use client";
+
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 /*
- * 20FIT SHOP wordmark, rebuilt as a theme-aware inline lockup (no bitmap):
- *   "2 ◎ FIT | SHOP"  — the ◎ is a ring + red center dot, "SHOP" is brand red.
+ * 20FIT SHOP logo — hosted on media.20fit.id (WordPress CDN), theme-aware:
+ *   LIGHT → 07-…-BLACK  (black text + red circle, transparent bg)
+ *   DARK  → 08-…-WHITE  (white text + red circle, transparent bg)
  *
- * Colours come from CSS variables, so it auto-adapts:
- *   - text (2, FIT, divider) = var(--fg): black in light mode, white in dark mode
- *   - the dot + SHOP         = var(--accent) = #BF0000 (brand red) in both modes
- *
- * Because it's driven purely by CSS variables there is no theme flash and no
- * client-side hydration guard needed. To use the official raster logos instead,
- * drop logo-shop-black.png / logo-shop-white.png into public/assets/logo/ and
- * swap this lockup for a <picture>/next<Image> pair keyed on the theme class.
+ * The source PNG is 6800×2500 but the wordmark only fills a ~5355×700 box
+ * (left-aligned, vertically centred — lots of transparent padding). So the
+ * frame is sized to the CONTENT aspect ratio and the image is `cover` + left
+ * center, which crops the padding and lets the logo fill the given height.
+ * (Plain objectFit:contain on the full file would render it tiny.)
  */
+const LOGO = {
+  dark: "https://media.20fit.id/wp-content/uploads/2026/07/08-20FIT-SHOP-WHITE-1-scaled.png",
+  light: "https://media.20fit.id/wp-content/uploads/2026/07/07-20FIT-SHOP-BLACK-1-scaled.png",
+};
+
+const CONTENT_ASPECT = 5355 / 700; // ≈ 7.65 : 1
+
 export function Logo20FIT({
-  height = 26,
+  height = 40,
   className,
 }: {
   height?: number;
   className?: string;
 }) {
-  const fontSize = Math.round(height * 0.82);
-  const ring = Math.round(height * 0.8);
-  const gap = Math.max(1, Math.round(height * 0.02));
-  const dividerH = Math.round(height * 0.6);
-  const dividerMargin = Math.round(height * 0.32);
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  return (
-    <span
-      role="img"
-      aria-label="20FIT Shop"
-      className={cn(
-        "inline-flex select-none items-center font-bold tracking-tight",
-        className,
-      )}
-      style={{ height, fontSize, lineHeight: 1, color: "var(--fg)" }}
-    >
-      <span aria-hidden>2</span>
-      <svg
+  const width = Math.round(height * CONTENT_ASPECT);
+
+  // Reserve the space before the theme is known to avoid layout shift / mismatch.
+  if (!mounted) {
+    return (
+      <div
+        style={{ width, height }}
+        className={cn("shrink-0", className)}
         aria-hidden
-        width={ring}
-        height={ring}
-        viewBox="0 0 100 100"
-        style={{ margin: `0 ${gap}px`, flex: "0 0 auto" }}
-      >
-        <circle
-          cx="50"
-          cy="50"
-          r="43"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="13"
-        />
-        <circle cx="50" cy="50" r="23" fill="var(--accent)" />
-      </svg>
-      <span aria-hidden>FIT</span>
-      <span
-        aria-hidden
-        style={{
-          width: 1.5,
-          height: dividerH,
-          background: "currentColor",
-          opacity: 0.35,
-          margin: `0 ${dividerMargin}px`,
-        }}
       />
-      <span aria-hidden style={{ color: "var(--accent)", letterSpacing: "0.01em" }}>
-        SHOP
-      </span>
-    </span>
+    );
+  }
+
+  const src = resolvedTheme === "dark" ? LOGO.dark : LOGO.light;
+  return (
+    <div
+      style={{ width, height, position: "relative" }}
+      className={cn("shrink-0", className)}
+    >
+      <Image
+        src={src}
+        alt="20FIT Shop"
+        fill
+        priority
+        sizes={`${width}px`}
+        style={{ objectFit: "cover", objectPosition: "left center" }}
+      />
+    </div>
   );
 }
