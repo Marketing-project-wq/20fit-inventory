@@ -303,6 +303,94 @@ export async function getAccessLogs(limit = 100): Promise<AccessLog[] | null> {
   }));
 }
 
+// ------------------------------- Settings ----------------------------------
+export type SkuAdmin = {
+  variant_id: string;
+  sku_code: string;
+  product_name: string;
+  category_name: string | null;
+  cost_price: number | null;
+  selling_price: number | null;
+  reorder_point: number | null;
+  unit_of_measure: string | null;
+  is_active: boolean;
+};
+
+export type LocationAdmin = {
+  location_id: string;
+  name: string;
+  type: string;
+  is_active: boolean;
+};
+
+export async function getSkuAdmin(): Promise<SkuAdmin[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const [variants, products, categories] = await Promise.all([
+    sb
+      .from("shop_product_variants")
+      .select(
+        "variant_id,product_id,sku_code,cost_price,selling_price,reorder_point,unit_of_measure,is_active",
+      ),
+    sb.from("shop_products").select("product_id,name,category_id"),
+    sb.from("shop_categories").select("category_id,name"),
+  ]);
+  if (variants.error) return null;
+  const prodById = new Map((products.data ?? []).map((p) => [p.product_id, p]));
+  const catName = new Map((categories.data ?? []).map((c) => [c.category_id, c.name]));
+  return (variants.data ?? [])
+    .map((v) => {
+      const p = prodById.get(v.product_id);
+      return {
+        variant_id: v.variant_id,
+        sku_code: v.sku_code,
+        product_name: p?.name ?? v.sku_code,
+        category_name: p?.category_id ? (catName.get(p.category_id) ?? null) : null,
+        cost_price: v.cost_price,
+        selling_price: v.selling_price,
+        reorder_point: v.reorder_point,
+        unit_of_measure: v.unit_of_measure,
+        is_active: v.is_active ?? true,
+      };
+    })
+    .sort((a, b) => a.product_name.localeCompare(b.product_name));
+}
+
+export async function getLocationsAdmin(): Promise<LocationAdmin[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("shop_locations")
+    .select("location_id,name,type,is_active")
+    .order("name");
+  if (error) return null;
+  return (data ?? []).map((l) => ({
+    location_id: l.location_id,
+    name: l.name,
+    type: l.type,
+    is_active: l.is_active ?? true,
+  }));
+}
+
+export async function getCategories(): Promise<
+  { category_id: string; name: string }[]
+> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return [];
+  const { data } = await sb
+    .from("shop_categories")
+    .select("category_id,name")
+    .order("name");
+  return data ?? [];
+}
+
+export async function getBrands(): Promise<{ brand_id: string; name: string }[]> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return [];
+  const { data } = await sb.from("shop_brands").select("brand_id,name").order("name");
+  return data ?? [];
+}
+
 // ----------------------------- Stock opname --------------------------------
 export type OpnameSession = {
   session_id: string;
