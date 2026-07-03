@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { cn, formatIDR } from "@/lib/utils";
-import { getDashboard } from "@/lib/data";
+import { getDashboard, getTrendMovements } from "@/lib/data";
+import { movementTrend } from "@/lib/reports";
 import { StockBadge, MovementBadge, MOVEMENT_KEY } from "@/components/badges";
+import { MovementTrendChart } from "@/components/dashboard/MovementTrendChart";
 
 type Tone = "accent" | "warning" | "danger" | "success";
 const toneText: Record<Tone, string> = {
@@ -36,6 +38,9 @@ export default async function DashboardPage() {
   const tm = await getTranslations("movement");
 
   const data = await getDashboard();
+  const trendRows = await getTrendMovements();
+  const trendWeek = trendRows ? movementTrend(trendRows, "week") : [];
+  const trendMonth = trendRows ? movementTrend(trendRows, "month") : [];
 
   const kpis: { label: string; value: string; icon: LucideIcon; tone: Tone }[] = [
     {
@@ -119,6 +124,9 @@ export default async function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Activity trend */}
+      {data && <MovementTrendChart week={trendWeek} month={trendMonth} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Low-stock watchlist */}

@@ -8,6 +8,56 @@ const INBOUND = new Set([
 ]);
 const ONLINE = new Set(["tokopedia", "shopee"]);
 const DAY = 86_400_000;
+const MON = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+// --------------------------- Activity trend --------------------------------
+export type TrendPoint = { period: string; label: string; masuk: number; keluar: number };
+
+/** Bucket movements into weekly or monthly totals of goods-in vs goods-out. */
+export function movementTrend(
+  movements: { movement_type: string; quantity: number; performed_at: string }[],
+  granularity: "week" | "month",
+): TrendPoint[] {
+  const buckets = new Map<
+    string,
+    { label: string; masuk: number; keluar: number; sort: number }
+  >();
+  for (const m of movements) {
+    const d = new Date(m.performed_at);
+    if (Number.isNaN(d.getTime())) continue;
+    let key: string, label: string, sort: number;
+    if (granularity === "month") {
+      const y = d.getUTCFullYear();
+      const mo = d.getUTCMonth();
+      key = `${y}-${String(mo + 1).padStart(2, "0")}`;
+      label = `${MON[mo]} ${String(y).slice(2)}`;
+      sort = y * 12 + mo;
+    } else {
+      const dow = (d.getUTCDay() + 6) % 7; // Monday = 0
+      const ws = new Date(
+        Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dow),
+      );
+      key = ws.toISOString().slice(0, 10);
+      label = `${ws.getUTCDate()} ${MON[ws.getUTCMonth()]}`;
+      sort = ws.getTime();
+    }
+    const b = buckets.get(key) ?? { label, masuk: 0, keluar: 0, sort };
+    if (INBOUND.has(m.movement_type)) b.masuk += m.quantity;
+    else b.keluar += m.quantity;
+    buckets.set(key, b);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[1].sort - b[1].sort)
+    .map(([period, b]) => ({
+      period,
+      label: b.label,
+      masuk: b.masuk,
+      keluar: b.keluar,
+    }));
+}
 
 // -------------------------------- Valuation --------------------------------
 export type ValuationRow = {
