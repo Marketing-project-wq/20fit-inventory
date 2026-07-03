@@ -2,8 +2,7 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import { useTranslations } from "next-intl";
-import { PenLine, FileSpreadsheet, QrCode } from "lucide-react";
-import { Link } from "@/i18n/navigation";
+import { PenLine, FileSpreadsheet } from "lucide-react";
 import { StockInForm } from "@/components/forms/StockInForm";
 import { PackingListImport } from "@/components/import/PackingListImport";
 import { cn } from "@/lib/utils";
@@ -26,7 +25,6 @@ export function BarangMasukTabs({
 }) {
   const tf = useTranslations("form");
   const ti = useTranslations("import");
-  const td = useTranslations("dashboard");
 
   return (
     <Tabs.Root defaultValue="manual">
@@ -39,13 +37,6 @@ export function BarangMasukTabs({
           <FileSpreadsheet size={15} />
           {ti("tabImport")}
         </Tabs.Trigger>
-        <Link
-          href="/scan"
-          className="ml-auto inline-flex items-center gap-1.5 pb-2 text-sm text-muted transition-colors hover:text-fg"
-        >
-          <QrCode size={15} />
-          {td("scanQR")}
-        </Link>
       </Tabs.List>
 
       <Tabs.Content value="manual" className="max-w-xl focus:outline-none">
