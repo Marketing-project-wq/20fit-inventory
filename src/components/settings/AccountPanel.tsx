@@ -4,9 +4,16 @@ import { useActionState } from "react";
 import { useTranslations } from "next-intl";
 import { Mail, KeyRound, Users, Info } from "lucide-react";
 import { changePassword, type SettingsState } from "@/lib/settings-actions";
+import type { StaffRole } from "@/lib/data";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
 
-export function AccountPanel({ email }: { email: string }) {
+export function AccountPanel({
+  email,
+  role,
+}: {
+  email: string;
+  role: StaffRole | null;
+}) {
   const t = useTranslations("settings");
   const tc = useTranslations("common");
   const [state, action, pending] = useActionState<SettingsState, FormData>(
@@ -25,6 +32,11 @@ export function AccountPanel({ email }: { email: string }) {
             <div className="text-xs text-muted">{t("signedInAs")}</div>
             <div className="truncate font-medium text-fg">{email || "—"}</div>
           </div>
+          {role && (
+            <span className="ml-auto shrink-0 rounded-full bg-accent-dim px-2.5 py-1 text-xs font-medium text-accent">
+              {t(`role_${role}`)}
+            </span>
+          )}
         </div>
       </div>
 
