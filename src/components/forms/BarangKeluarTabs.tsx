@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { PenLine, ReceiptText } from "lucide-react";
 import { StockOutForm } from "@/components/forms/StockOutForm";
 import { XeroImportPanel } from "@/components/import/XeroImportPanel";
+import { RecentMovements } from "@/components/movements/RecentMovements";
+import type { Movement } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 type Opt = { variant_id: string; sku_code: string; product_name: string };
@@ -19,9 +21,11 @@ const triggerCls = cn(
 export function BarangKeluarTabs({
   skus,
   locations,
+  recent,
 }: {
   skus: Opt[];
   locations: Loc[];
+  recent: Movement[];
 }) {
   const tf = useTranslations("form");
   const tx = useTranslations("xero");
@@ -39,8 +43,12 @@ export function BarangKeluarTabs({
         </Tabs.Trigger>
       </Tabs.List>
 
-      <Tabs.Content value="manual" className="max-w-xl focus:outline-none">
+      <Tabs.Content
+        value="manual"
+        className="grid gap-6 focus:outline-none lg:grid-cols-2"
+      >
         <StockOutForm skus={skus} locations={locations} />
+        <RecentMovements movements={recent} direction="out" />
       </Tabs.Content>
       <Tabs.Content value="xero" className="focus:outline-none">
         <XeroImportPanel skus={skus} locations={locations} />
