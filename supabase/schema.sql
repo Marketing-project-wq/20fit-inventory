@@ -427,24 +427,45 @@ BEGIN
 END; $$;
 
 -- ------------------------------------------------------------
--- PACKING LIST IMPORT: bulk goods-in from a supplier packing list. Records one
--- purchase_receipt movement per item, atomically, reusing shop_record_movement.
+-- PACKING LIST IMPORT: bulk goods-in from a supplier (China) packing list.
+-- Learned mapping table (mirrors shop_xero_product_mappings) + an atomic RPC
+-- that records one purchase_receipt per item and learns each confirmed mapping.
 -- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shop_packing_list_mappings (
+  mapping_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_description TEXT NOT NULL UNIQUE,
+  variant_id         UUID NOT NULL REFERENCES shop_product_variants(variant_id) ON DELETE CASCADE,
+  created_at         TIMESTAMPTZ DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE shop_packing_list_mappings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_packing_map_read ON shop_packing_list_mappings;
+CREATE POLICY shop_packing_map_read ON shop_packing_list_mappings
+  FOR SELECT TO authenticated USING (true);
+GRANT SELECT ON shop_packing_list_mappings TO authenticated;
+
 CREATE OR REPLACE FUNCTION shop_import_packing_list(
   p_location uuid,
-  p_items jsonb,
+  p_items jsonb,          -- [{variant_id, quantity, unit_cost, description}]
   p_reference text DEFAULT NULL
 ) RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_item jsonb; v_count int := 0;
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid; v_desc text;
 BEGIN
   IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
+    v_variant := (v_item->>'variant_id')::uuid;
+    v_desc := v_item->>'description';
     PERFORM shop_record_movement(
-      (v_item->>'variant_id')::uuid, p_location, 'purchase_receipt',
+      v_variant, p_location, 'purchase_receipt',
       (v_item->>'quantity')::int, NULLIF(v_item->>'unit_cost','')::numeric,
-      'packing_list', NULL, NULL, NULL, p_reference, false);
+      'bulk_import', NULL, NULL, NULL, p_reference, false);
+    IF v_variant IS NOT NULL AND v_desc IS NOT NULL AND length(btrim(v_desc)) > 0 THEN
+      INSERT INTO shop_packing_list_mappings(source_description, variant_id)
+      VALUES (btrim(v_desc), v_variant)
+      ON CONFLICT (source_description) DO UPDATE SET variant_id = EXCLUDED.variant_id, updated_at = NOW();
+    END IF;
     v_count := v_count + 1;
   END LOOP;
   RETURN v_count;
