@@ -2,9 +2,9 @@ import { cn } from "@/lib/utils";
 import type { StockStatus } from "@/lib/data";
 
 const stockTone: Record<StockStatus, string> = {
-  ok: "bg-success/15 text-success",
-  low: "bg-warning/15 text-warning",
-  out: "bg-danger/15 text-danger",
+  ok: "border-success text-success",
+  low: "border-warning text-warning",
+  out: "border-danger text-danger",
 };
 
 export function StockBadge({
@@ -17,7 +17,7 @@ export function StockBadge({
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+        "font-display inline-flex items-center rounded-full border bg-transparent px-2.5 py-0.5 text-[11px] font-bold",
         stockTone[status],
       )}
     >

@@ -3,56 +3,75 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * 20FIT Shop Inventory — design system (PRD Fase 3), light + dark mode.
- * Brand red #BF0000 (verified from logo pixel analysis; replaces the old orange).
+ * 20FIT DESIGN SYSTEM v1.0 — Glass Minimalist.
+ * Source: 20fit-design-system.pdf. Accent red #E4002B (light) / #FF3B57 (dark).
  *
- * Tailwind v4: semantic runtime variables (--bg, --surface, --accent…) switch by
- * the .dark / .light class next-themes sets on <html>. `@theme inline` maps the
- * Tailwind color tokens onto them, so every existing utility (bg-surface,
- * text-accent, border-border, …) responds to the active theme with no edits.
+ * Tailwind v4: DS values live in the semantic vars (--fg, --surface, --accent…)
+ * that switch by the .dark / .light class next-themes sets on <html>. Names are
+ * unchanged from before, so every component (utility classes AND inline
+ * var(--accent) styles / recharts) restyles at once. Surfaces are translucent
+ * glass over a gradient background.
  */
 
-/* Dark mode (default) — also the scope used for the always-dark sidebar. */
+/* --- LIGHT MODE (default) --- */
 :root,
-.dark {
-  color-scheme: dark;
-
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface-2: #22263a;
-  --border: #2d3148;
-
-  --accent: #bf0000;
-  --accent-dim: rgba(191, 0, 0, 0.16);
-
-  --success: #2dd4bf;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-
-  --fg: #e8e9f0;
-  --muted: #6b7280;
-  --dim: #374151;
-}
-
-/* Light mode. */
 .light {
   color-scheme: light;
 
-  --bg: #f5f6fa;
-  --surface: #ffffff;
-  --surface-2: #f0f2f8;
-  --border: #e2e5f0;
+  --bg-from: #f2e9e6;
+  --bg-to: #e9eef3;
 
-  --accent: #bf0000;
-  --accent-dim: rgba(191, 0, 0, 0.08);
+  --bg: rgba(255, 255, 255, 0.66); /* inputs / header */
+  --surface: rgba(255, 255, 255, 0.55); /* glass cards */
+  --surface-2: rgba(255, 255, 255, 0.72); /* glass-strong / thead */
+  --border: rgba(29, 29, 31, 0.1); /* dividers */
+  --glass-rim: rgba(255, 255, 255, 0.9); /* bright card edge */
 
-  --success: #0d9488;
-  --warning: #d97706;
-  --danger: #dc2626;
+  --accent: #e4002b;
+  --accent-dim: rgba(228, 0, 43, 0.1);
 
-  --fg: #111827;
-  --muted: #4b5563;
-  --dim: #9ca3af;
+  --success: #1c8a4b;
+  --warning: #c77a00;
+  --danger: #e4002b;
+  --info: #0068c9;
+
+  --fg: #1d1d1f;
+  --muted: #6e6e73;
+  --dim: #9a9a9e;
+
+  --glass-blur: 24px;
+  --glass-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* --- DARK MODE --- */
+.dark {
+  color-scheme: dark;
+
+  --bg-from: #1c1c1e;
+  --bg-to: #0b0b0d;
+
+  --bg: rgba(255, 255, 255, 0.08);
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.1);
+  --glass-rim: rgba(255, 255, 255, 0.14);
+
+  --accent: #ff3b57;
+  --accent-dim: rgba(255, 59, 87, 0.16);
+
+  --success: #34c77b;
+  --warning: #ffb454;
+  --danger: #ff3b57;
+  --info: #4da8ff;
+
+  --fg: #f5f5f5;
+  --muted: #a1a1a6;
+  --dim: #6e6e73;
+
+  --glass-blur: 24px;
+  --glass-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 @theme inline {
@@ -65,30 +84,80 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-info: var(--info);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
   --color-dim: var(--dim);
 }
 
 @theme {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas,
-    monospace;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jbmono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-barlow), ui-sans-serif, sans-serif;
+  /* DS radii: cards 22px, small 14px. */
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-2xl: 26px;
 }
 
+/* ------------------------------- Base ------------------------------------ */
 body {
-  background-color: var(--bg);
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%);
+  background-attachment: fixed;
   color: var(--fg);
-  font-family: var(--font-sans);
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
+    color 0.2s ease,
+    background 0.3s ease;
 }
 
-/* SKU codes are the most important element in a warehouse UI — always mono + accent. */
+/* Glass surfaces: translucent + blur + bright rim. Applies automatically to
+   every existing card / table / sidebar using bg-surface(-2). */
+.bg-surface,
+.bg-surface-2 {
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-color: var(--glass-rim);
+  box-shadow: var(--glass-shadow);
+}
+
+/* ---------------------------- Typography --------------------------------- */
+.font-display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+.font-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Display font + uppercase for chrome (headings, nav, buttons, table headers,
+   tabs). Content text (product names, notes) stays Manrope. */
+h1,
+h2,
+h3,
+th,
+nav a,
+button,
+[role="tab"] {
+  font-family: var(--font-display);
+}
+h1,
+h2,
+th,
+nav a,
+[role="tab"],
+button {
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+/* SKU codes: mono + accent, tabular. */
 .sku {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--accent);
   letter-spacing: -0.01em;
 }
@@ -96,5 +165,5 @@ body {
 /* Thin scrollbars that match the active theme. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--glass-rim) transparent;
 }

@@ -29,11 +29,9 @@ export function Sidebar({
         onClick={onClose}
         aria-hidden
       />
-      {/* `dark` scopes the sidebar to dark tokens so it stays dark in light mode
-          too (a common shell pattern — Linear, Vercel, Notion). */}
       <aside
         className={cn(
-          "dark fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border bg-surface transition-transform lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border bg-surface transition-transform lg:static lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -60,7 +58,7 @@ export function Sidebar({
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   active
-                    ? "bg-accent-dim text-accent"
+                    ? "bg-accent text-white shadow-sm"
                     : "text-muted hover:bg-surface-2 hover:text-fg",
                 )}
               >
