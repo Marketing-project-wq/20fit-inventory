@@ -34,7 +34,8 @@
     "connectNotice": "Data inventaris akan tampil setelah database Supabase terhubung.",
     "activityTrend": "Tren Aktivitas Stok",
     "perWeek": "Per Minggu",
-    "perMonth": "Per Bulan"
+    "perMonth": "Per Bulan",
+    "week": "Minggu"
   },
   "product": {
     "skuCode": "Kode SKU",

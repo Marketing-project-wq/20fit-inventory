@@ -13,40 +13,68 @@ import {
   Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { inputCls } from "@/components/forms/ui";
 import type { TrendPoint } from "@/lib/reports";
 
 export function MovementTrendChart({
-  week,
   month,
+  weeksByMonth,
 }: {
-  week: TrendPoint[];
   month: TrendPoint[];
+  weeksByMonth: Record<string, TrendPoint[]>;
 }) {
   const t = useTranslations("dashboard");
   const ts = useTranslations("stock");
   const tc = useTranslations("common");
   const [gran, setGran] = useState<"week" | "month">("month");
-  const data = gran === "week" ? week : month;
+  const months = month.map((m) => ({ value: m.period, label: m.label }));
+  const [selMonth, setSelMonth] = useState(
+    months[months.length - 1]?.value ?? "",
+  );
+
+  const data =
+    gran === "week"
+      ? (weeksByMonth[selMonth] ?? []).map((p) => ({
+          ...p,
+          label: `${t("week")} ${p.label}`,
+        }))
+      : month;
 
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-fg">{t("activityTrend")}</h3>
-        <div className="flex items-center overflow-hidden rounded-lg border border-border text-xs font-semibold">
-          {(["week", "month"] as const).map((g) => (
-            <button
-              key={g}
-              type="button"
-              onClick={() => setGran(g)}
-              className={cn(
-                "px-3 py-1.5 transition-colors",
-                gran === g ? "bg-accent text-bg" : "text-muted hover:text-fg",
-              )}
-              aria-pressed={gran === g}
+        <div className="flex items-center gap-2">
+          {gran === "week" && months.length > 0 && (
+            <select
+              value={selMonth}
+              onChange={(e) => setSelMonth(e.target.value)}
+              aria-label={t("perMonth")}
+              className={cn(inputCls, "w-auto py-1.5 text-xs")}
             >
-              {g === "week" ? t("perWeek") : t("perMonth")}
-            </button>
-          ))}
+              {months.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="flex items-center overflow-hidden rounded-lg border border-border text-xs font-semibold">
+            {(["week", "month"] as const).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setGran(g)}
+                className={cn(
+                  "px-3 py-1.5 transition-colors",
+                  gran === g ? "bg-accent text-bg" : "text-muted hover:text-fg",
+                )}
+                aria-pressed={gran === g}
+              >
+                {g === "week" ? t("perWeek") : t("perMonth")}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
