@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "@/lib/import-server";
 
 export type SettingsResult = { ok: boolean; error?: string; id?: string };
@@ -123,6 +124,89 @@ export async function upsertLocation(input: unknown): Promise<SettingsResult> {
   if (e) return { ok: false, error: e.message };
   revalidatePath("/", "layout");
   return { ok: true, id: data?.location_id };
+}
+
+// -------------------------------- Staff -------------------------------------
+/** Only admins (or the bootstrap case with no staff record yet) may manage staff. */
+async function canManageStaff(sb: SupabaseClient): Promise<boolean> {
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
+  const email = user?.email;
+  if (!email) return false;
+  const { data } = await sb
+    .from("shop_staff")
+    .select("role")
+    .eq("email", email)
+    .maybeSingle();
+  return !data || data.role === "admin";
+}
+
+const staffSchema = z.object({
+  staff_id: z.string().uuid().nullable().optional(),
+  full_name: z.string().trim().min(1).max(200),
+  email: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().email().max(200).optional(),
+  ),
+  phone: z.string().trim().max(50).optional(),
+  role: z.enum(["admin", "manager", "staff", "viewer"]),
+  is_active: z.boolean(),
+});
+
+export async function upsertStaff(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  if (!(await canManageStaff(sb!))) return { ok: false, error: "forbidden" };
+  const p = staffSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+  const d = p.data;
+
+  const row = {
+    full_name: d.full_name,
+    email: d.email ?? null,
+    phone: d.phone || null,
+    role: d.role,
+    is_active: d.is_active,
+    updated_at: new Date().toISOString(),
+  };
+  const dupe = (msg: string) =>
+    /duplicate|unique/i.test(msg) ? "email_exists" : msg;
+
+  if (d.staff_id) {
+    const { error: e } = await sb!
+      .from("shop_staff")
+      .update(row)
+      .eq("staff_id", d.staff_id);
+    if (e) return { ok: false, error: dupe(e.message) };
+    revalidatePath("/", "layout");
+    return { ok: true, id: d.staff_id };
+  }
+  const { data, error: e } = await sb!
+    .from("shop_staff")
+    .insert(row)
+    .select("staff_id")
+    .single();
+  if (e) return { ok: false, error: dupe(e.message) };
+  revalidatePath("/", "layout");
+  return { ok: true, id: data?.staff_id };
+}
+
+export async function deleteStaff(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  if (!(await canManageStaff(sb!))) return { ok: false, error: "forbidden" };
+  const parsed = z
+    .object({ staff_id: z.string().uuid() })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const { error: e } = await sb!
+    .from("shop_staff")
+    .delete()
+    .eq("staff_id", parsed.data.staff_id);
+  if (e) return { ok: false, error: e.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 // ------------------------------- Password -----------------------------------

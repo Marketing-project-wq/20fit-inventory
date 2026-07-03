@@ -574,6 +574,30 @@ END; $$;
 REVOKE ALL ON FUNCTION shop_create_sku(text,text,text,uuid,uuid,numeric,numeric,int,text) FROM public, anon;
 GRANT EXECUTE ON FUNCTION shop_create_sku(text,text,text,uuid,uuid,numeric,numeric,int,text) TO authenticated, service_role;
 
+-- ------------------------------------------------------------
+-- STAFF & ROLES — 20FIT Shop-specific staff registry, separate from the shared
+-- auth.users. Roles: admin | manager | staff | viewer.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shop_staff (
+  staff_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name  TEXT NOT NULL,
+  email      TEXT UNIQUE,
+  phone      TEXT,
+  role       TEXT NOT NULL DEFAULT 'staff',
+  user_id    UUID,
+  is_active  BOOLEAN DEFAULT true,
+  notes      TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT shop_staff_role_chk CHECK (role IN ('admin','manager','staff','viewer'))
+);
+ALTER TABLE shop_staff ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_staff_read ON shop_staff;
+CREATE POLICY shop_staff_read ON shop_staff FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS shop_staff_write ON shop_staff;
+CREATE POLICY shop_staff_write ON shop_staff FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT SELECT, INSERT, UPDATE, DELETE ON shop_staff TO authenticated;
+
 DO $$
 DECLARE fn text;
 BEGIN

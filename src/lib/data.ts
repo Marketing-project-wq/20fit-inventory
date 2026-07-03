@@ -406,6 +406,48 @@ export async function getBrands(): Promise<{ brand_id: string; name: string }[]>
   return data ?? [];
 }
 
+// -------------------------------- Staff ------------------------------------
+export type StaffRole = "admin" | "manager" | "staff" | "viewer";
+export type StaffMember = {
+  staff_id: string;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  role: StaffRole;
+  is_active: boolean;
+};
+
+export async function getStaff(): Promise<StaffMember[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("shop_staff")
+    .select("staff_id,full_name,email,phone,role,is_active")
+    .order("full_name");
+  if (error) return null;
+  return (data ?? []) as StaffMember[];
+}
+
+/** The logged-in user's email + their 20FIT Shop role (null if not registered). */
+export async function getCurrentStaff(): Promise<{
+  email: string;
+  role: StaffRole | null;
+}> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return { email: "", role: null };
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
+  const email = user?.email ?? "";
+  if (!email) return { email: "", role: null };
+  const { data } = await sb
+    .from("shop_staff")
+    .select("role")
+    .eq("email", email)
+    .maybeSingle();
+  return { email, role: (data?.role as StaffRole) ?? null };
+}
+
 // ----------------------------- Stock opname --------------------------------
 export type OpnameSession = {
   session_id: string;
