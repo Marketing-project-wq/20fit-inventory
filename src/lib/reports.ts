@@ -59,6 +59,38 @@ export function movementTrend(
     }));
 }
 
+/**
+ * Weeks-of-month breakdown, keyed by YYYY-MM. Each month always yields 4 weeks
+ * (Week 1 = days 1–7 … Week 4 = days 22–end); label holds the week number.
+ */
+export function weekOfMonthTrend(
+  movements: { movement_type: string; quantity: number; performed_at: string }[],
+): Record<string, TrendPoint[]> {
+  const byMonth = new Map<string, TrendPoint[]>();
+  for (const m of movements) {
+    const d = new Date(m.performed_at);
+    if (Number.isNaN(d.getTime())) continue;
+    const mkey = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const wk = Math.min(4, Math.ceil(d.getUTCDate() / 7)); // 1..4
+    let arr = byMonth.get(mkey);
+    if (!arr) {
+      arr = [1, 2, 3, 4].map((n) => ({
+        period: `${mkey}-w${n}`,
+        label: String(n),
+        masuk: 0,
+        keluar: 0,
+      }));
+      byMonth.set(mkey, arr);
+    }
+    const pt = arr[wk - 1];
+    if (INBOUND.has(m.movement_type)) pt.masuk += m.quantity;
+    else pt.keluar += m.quantity;
+  }
+  return Object.fromEntries(
+    [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+  );
+}
+
 // -------------------------------- Valuation --------------------------------
 export type ValuationRow = {
   category: string;

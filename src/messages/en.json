@@ -34,7 +34,8 @@
     "connectNotice": "Inventory data will appear once the Supabase database is connected.",
     "activityTrend": "Stock Activity Trend",
     "perWeek": "Per Week",
-    "perMonth": "Per Month"
+    "perMonth": "Per Month",
+    "week": "Week"
   },
   "product": {
     "skuCode": "SKU Code",

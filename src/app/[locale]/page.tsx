@@ -15,7 +15,7 @@ import {
 import { Link } from "@/i18n/navigation";
 import { cn, formatIDR } from "@/lib/utils";
 import { getDashboard, getTrendMovements } from "@/lib/data";
-import { movementTrend } from "@/lib/reports";
+import { movementTrend, weekOfMonthTrend } from "@/lib/reports";
 import { StockBadge, MovementBadge, MOVEMENT_KEY } from "@/components/badges";
 import { MovementTrendChart } from "@/components/dashboard/MovementTrendChart";
 
@@ -39,8 +39,8 @@ export default async function DashboardPage() {
 
   const data = await getDashboard();
   const trendRows = await getTrendMovements();
-  const trendWeek = trendRows ? movementTrend(trendRows, "week") : [];
   const trendMonth = trendRows ? movementTrend(trendRows, "month") : [];
+  const trendWeeks = trendRows ? weekOfMonthTrend(trendRows) : {};
 
   const kpis: { label: string; value: string; icon: LucideIcon; tone: Tone }[] = [
     {
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Activity trend */}
-      {data && <MovementTrendChart week={trendWeek} month={trendMonth} />}
+      {data && <MovementTrendChart month={trendMonth} weeksByMonth={trendWeeks} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Low-stock watchlist */}
