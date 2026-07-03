@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Check, Loader2, Plus, X } from "lucide-react";
+import { Check, Loader2, Plus, X, Zap } from "lucide-react";
 import { createSku, updateVariant } from "@/lib/settings-actions";
 import type { SkuAdmin } from "@/lib/data";
+import { generateSkuCode } from "@/lib/sku/generate-sku";
 import { cn } from "@/lib/utils";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
 
@@ -176,6 +177,7 @@ export function SkuManager({
         <AddSkuForm
           categories={categories}
           brands={brands}
+          existingSkus={list.map((s) => s.sku_code)}
           onCreated={(row) => {
             setList((prev) => [row, ...prev]);
             setShowAdd(false);
@@ -213,10 +215,12 @@ export function SkuManager({
 function AddSkuForm({
   categories,
   brands,
+  existingSkus,
   onCreated,
 }: {
   categories: Opt[];
   brands: Opt[];
+  existingSkus: string[];
   onCreated: (row: SkuAdmin) => void;
 }) {
   const t = useTranslations("settings");
@@ -224,6 +228,40 @@ function AddSkuForm({
   const tc = useTranslations("common");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  // The SKU field becomes controlled so Generate can fill it; every other field
+  // stays uncontrolled (read via FormData on submit), so the form is unchanged.
+  const [skuCode, setSkuCode] = useState("");
+  const [genNote, setGenNote] = useState<{
+    tone: "warning" | "success";
+    text: string;
+  } | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const categoryRef = useRef<HTMLSelectElement>(null);
+
+  function handleGenerate() {
+    const categoryId = categoryRef.current?.value ?? "";
+    const productName = nameRef.current?.value.trim() ?? "";
+    if (!categoryId) {
+      setGenNote({ tone: "warning", text: t("generateNeedCategory") });
+      categoryRef.current?.focus();
+      return;
+    }
+    if (!productName) {
+      setGenNote({ tone: "warning", text: t("generateNeedName") });
+      nameRef.current?.focus();
+      return;
+    }
+    const categoryName =
+      categories.find((c) => c.id === categoryId)?.name ?? "";
+    const result = generateSkuCode({ categoryName, productName, existingSkus });
+    setSkuCode(result.sku);
+    setGenNote(
+      result.note
+        ? { tone: "warning", text: t(result.note.key, result.note.params) }
+        : { tone: "success", text: t("generateReady") },
+    );
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -267,6 +305,8 @@ function AddSkuForm({
         is_active: true,
       });
       form.reset();
+      setSkuCode("");
+      setGenNote(null);
     });
   }
 
@@ -277,13 +317,56 @@ function AddSkuForm({
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={tp("productName")}>
-          <input name="name" required maxLength={300} className={inputCls} />
+          <input
+            ref={nameRef}
+            name="name"
+            required
+            maxLength={300}
+            className={inputCls}
+          />
         </Field>
         <Field label={tp("skuCode")}>
-          <input name="sku_code" required maxLength={100} className={inputCls} />
+          <div className="flex items-stretch gap-2">
+            <input
+              name="sku_code"
+              required
+              maxLength={100}
+              value={skuCode}
+              onChange={(e) => {
+                setSkuCode(e.target.value);
+                setGenNote(null);
+              }}
+              placeholder="20FIT-KB-016"
+              className={cn(inputCls, "font-mono")}
+            />
+            <button
+              type="button"
+              onClick={handleGenerate}
+              title={t("generateTitle")}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 text-xs font-semibold whitespace-nowrap text-fg transition-colors hover:border-accent hover:text-accent"
+            >
+              <Zap size={14} className="text-accent" />
+              {t("generate")}
+            </button>
+          </div>
+          {genNote && (
+            <span
+              className={cn(
+                "mt-1 block text-xs",
+                genNote.tone === "warning" ? "text-warning" : "text-success",
+              )}
+            >
+              {genNote.text}
+            </span>
+          )}
         </Field>
         <Field label={tp("category")}>
-          <select name="category_id" defaultValue="" className={inputCls}>
+          <select
+            ref={categoryRef}
+            name="category_id"
+            defaultValue=""
+            className={inputCls}
+          >
             <option value="">—</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
