@@ -299,5 +299,39 @@
     "unauthorized": "Sesi berakhir. Silakan masuk kembali.",
     "cameraError": "Tidak dapat mengakses kamera. Pastikan izin kamera telah diberikan.",
     "scanAgain": "Scan Lagi"
+  },
+  "settings": {
+    "subtitle": "Kelola SKU & harga, lokasi gudang, dan akun Anda.",
+    "tabSku": "SKU & Harga",
+    "tabLocation": "Lokasi",
+    "tabAccount": "Akun",
+    "save": "Simpan",
+    "active": "Aktif",
+    "unit": "Satuan",
+    "addSku": "Tambah SKU",
+    "createSku": "Buat SKU",
+    "skuCount": "{count} SKU",
+    "skuExists": "Kode SKU sudah dipakai.",
+    "genericError": "Terjadi kesalahan. Coba lagi.",
+    "addLocation": "Tambah Lokasi",
+    "locationName": "Nama Lokasi",
+    "locationType": "Tipe",
+    "locationCount": "{count} lokasi",
+    "locType": {
+      "warehouse": "Gudang",
+      "showroom": "Showroom",
+      "storage": "Penyimpanan",
+      "in-transit": "Dalam Perjalanan"
+    },
+    "signedInAs": "Masuk sebagai",
+    "changePassword": "Ubah Kata Sandi",
+    "newPassword": "Kata Sandi Baru",
+    "confirmPassword": "Konfirmasi Kata Sandi",
+    "passwordHint": "Minimal 8 karakter",
+    "passwordChanged": "Kata sandi berhasil diubah.",
+    "passwordShort": "Kata sandi minimal 8 karakter.",
+    "passwordMismatch": "Konfirmasi kata sandi tidak cocok.",
+    "teamTitle": "Kelola Akun Tim",
+    "teamNote": "Menambah/menghapus akun staf memerlukan akses admin Supabase (autentikasi dipakai bersama seluruh sistem 20FIT), jadi belum tersedia di aplikasi ini demi keamanan."
   }
 }

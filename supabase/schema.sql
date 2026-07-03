@@ -545,6 +545,35 @@ BEGIN
   RETURN v_count;
 END; $$;
 
+-- ------------------------------------------------------------
+-- SETTINGS: create a product + its variant atomically (add SKU).
+-- (Variant/price/location edits go directly under the authenticated RLS policy.)
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION shop_create_sku(
+  p_name text, p_name_en text, p_sku_code text,
+  p_category uuid, p_brand uuid,
+  p_cost numeric, p_selling numeric, p_reorder int, p_unit text
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_product uuid; v_variant uuid;
+BEGIN
+  IF p_name IS NULL OR btrim(p_name) = '' THEN RAISE EXCEPTION 'invalid_name'; END IF;
+  IF p_sku_code IS NULL OR btrim(p_sku_code) = '' THEN RAISE EXCEPTION 'invalid_sku'; END IF;
+  IF EXISTS (SELECT 1 FROM shop_product_variants WHERE sku_code = btrim(p_sku_code)) THEN
+    RAISE EXCEPTION 'sku_exists';
+  END IF;
+  INSERT INTO shop_products(name, name_en, brand_id, category_id)
+    VALUES (btrim(p_name), NULLIF(btrim(coalesce(p_name_en, '')), ''), p_brand, p_category)
+    RETURNING product_id INTO v_product;
+  INSERT INTO shop_product_variants(
+    product_id, sku_code, cost_price, selling_price, reorder_point, unit_of_measure)
+    VALUES (v_product, btrim(p_sku_code), p_cost, p_selling, p_reorder,
+            coalesce(NULLIF(btrim(coalesce(p_unit, '')), ''), 'pcs'))
+    RETURNING variant_id INTO v_variant;
+  RETURN v_variant;
+END; $$;
+REVOKE ALL ON FUNCTION shop_create_sku(text,text,text,uuid,uuid,numeric,numeric,int,text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_create_sku(text,text,text,uuid,uuid,numeric,numeric,int,text) TO authenticated, service_role;
+
 DO $$
 DECLARE fn text;
 BEGIN

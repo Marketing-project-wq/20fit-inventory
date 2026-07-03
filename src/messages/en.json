@@ -299,5 +299,39 @@
     "unauthorized": "Session expired. Please sign in again.",
     "cameraError": "Cannot access the camera. Please make sure camera permission is granted.",
     "scanAgain": "Scan Again"
+  },
+  "settings": {
+    "subtitle": "Manage SKUs & prices, warehouse locations, and your account.",
+    "tabSku": "SKUs & Prices",
+    "tabLocation": "Locations",
+    "tabAccount": "Account",
+    "save": "Save",
+    "active": "Active",
+    "unit": "Unit",
+    "addSku": "Add SKU",
+    "createSku": "Create SKU",
+    "skuCount": "{count} SKUs",
+    "skuExists": "SKU code already exists.",
+    "genericError": "Something went wrong. Please try again.",
+    "addLocation": "Add Location",
+    "locationName": "Location Name",
+    "locationType": "Type",
+    "locationCount": "{count} locations",
+    "locType": {
+      "warehouse": "Warehouse",
+      "showroom": "Showroom",
+      "storage": "Storage",
+      "in-transit": "In Transit"
+    },
+    "signedInAs": "Signed in as",
+    "changePassword": "Change Password",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm Password",
+    "passwordHint": "At least 8 characters",
+    "passwordChanged": "Password changed successfully.",
+    "passwordShort": "Password must be at least 8 characters.",
+    "passwordMismatch": "Password confirmation doesn't match.",
+    "teamTitle": "Manage Team Accounts",
+    "teamNote": "Adding/removing staff accounts requires Supabase admin access (auth is shared across the whole 20FIT system), so it isn't available in this app for safety."
   }
 }
