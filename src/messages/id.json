@@ -31,7 +31,10 @@
     "issueGoods": "Keluar Barang",
     "scanQR": "Scan QR",
     "startOpname": "Stock Opname",
-    "connectNotice": "Data inventaris akan tampil setelah database Supabase terhubung."
+    "connectNotice": "Data inventaris akan tampil setelah database Supabase terhubung.",
+    "activityTrend": "Tren Aktivitas Stok",
+    "perWeek": "Per Minggu",
+    "perMonth": "Per Bulan"
   },
   "product": {
     "skuCode": "Kode SKU",

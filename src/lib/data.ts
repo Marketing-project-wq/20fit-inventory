@@ -231,6 +231,21 @@ export type RawMovement = {
   performed_at: string;
 };
 
+/** Minimal movement rows for the dashboard trend chart. */
+export async function getTrendMovements(): Promise<
+  { movement_type: string; quantity: number; performed_at: string }[] | null
+> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("shop_stock_movements")
+    .select("movement_type,quantity,performed_at")
+    .order("performed_at", { ascending: true })
+    .limit(10000);
+  if (error) return null;
+  return data ?? [];
+}
+
 /** SKUs (with stock + prices) plus the full movement ledger, for reporting. */
 export async function getReportSource(): Promise<{
   skus: Sku[];

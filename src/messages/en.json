@@ -31,7 +31,10 @@
     "issueGoods": "Issue Goods",
     "scanQR": "Scan QR",
     "startOpname": "Stock Opname",
-    "connectNotice": "Inventory data will appear once the Supabase database is connected."
+    "connectNotice": "Inventory data will appear once the Supabase database is connected.",
+    "activityTrend": "Stock Activity Trend",
+    "perWeek": "Per Week",
+    "perMonth": "Per Month"
   },
   "product": {
     "skuCode": "SKU Code",
