@@ -37,7 +37,8 @@ export async function GET(
     sb
       .from("shop_stock_levels")
       .select("location_id,quantity_on_hand,quantity_available")
-      .eq("variant_id", variant.variant_id),
+      .eq("variant_id", variant.variant_id)
+      .eq("condition", "good"),
     sb.from("shop_locations").select("location_id,name"),
   ]);
 

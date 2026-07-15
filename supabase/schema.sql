@@ -698,3 +698,175 @@ DROP POLICY IF EXISTS transfer_photos_insert ON storage.objects;
 CREATE POLICY transfer_photos_insert ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'transfer-photos');
 DROP POLICY IF EXISTS transfer_photos_read ON storage.objects;
 CREATE POLICY transfer_photos_read ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'transfer-photos');
+
+-- ============================================================================
+-- MIGRATION (2026-07): Returns & damaged goods in the Goods In module.
+--   1. Retur — stock returned to the warehouse in good OR damaged condition.
+--   2. Barang Masuk Rusak — goods received already damaged, kept OUT of the
+--      sellable pool (notes + photo required).
+-- Stock is now split by `condition` ('good' | 'damaged'). Damaged stock never
+-- counts as sellable / available. Applied to the live DB; kept here idempotently
+-- so a fresh provision reproduces it. NOTE: this section runs after the base
+-- definitions above and intentionally REPLACES the level/movement/transfer/
+-- xero/opname functions with condition-aware versions.
+-- ============================================================================
+
+-- Stock levels are now keyed per condition: a (variant, location) can hold both
+-- a 'good' row and a 'damaged' row. Replace the old 2-col unique with a 3-col one.
+ALTER TABLE shop_stock_levels
+  ADD COLUMN IF NOT EXISTS condition TEXT NOT NULL DEFAULT 'good'
+    CHECK (condition IN ('good','damaged'));
+ALTER TABLE shop_stock_levels
+  DROP CONSTRAINT IF EXISTS shop_stock_levels_variant_id_location_id_key;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'shop_stock_levels_variant_location_condition_key'
+      AND conrelid = 'shop_stock_levels'::regclass
+  ) THEN
+    ALTER TABLE shop_stock_levels
+      ADD CONSTRAINT shop_stock_levels_variant_location_condition_key
+      UNIQUE (variant_id, location_id, condition);
+  END IF;
+END $$;
+
+-- Each ledger row carries the condition of the goods it moved. (ADD COLUMN is
+-- allowed; the append-only trigger only blocks UPDATE/DELETE of existing rows.)
+ALTER TABLE shop_stock_movements
+  ADD COLUMN IF NOT EXISTS item_condition TEXT NOT NULL DEFAULT 'good'
+    CHECK (item_condition IN ('good','damaged'));
+
+-- Recompute now sums per condition into the matching level row. New inbound
+-- types: damage_in (received damaged), return_in_damaged (returned damaged).
+CREATE OR REPLACE FUNCTION shop_recompute_level(p_variant uuid, p_location uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE c text;
+BEGIN
+  FOREACH c IN ARRAY ARRAY['good','damaged'] LOOP
+    INSERT INTO shop_stock_levels(variant_id, location_id, condition, quantity_on_hand, quantity_reserved)
+    SELECT p_variant, p_location, c,
+      COALESCE(SUM(CASE WHEN movement_type IN ('purchase_receipt','transfer_in','return_in','adjustment_in','damage_in','return_in_damaged')
+                   THEN quantity ELSE -quantity END), 0), 0
+    FROM shop_stock_movements
+    WHERE variant_id = p_variant AND location_id = p_location AND item_condition = c
+    ON CONFLICT (variant_id, location_id, condition)
+    DO UPDATE SET quantity_on_hand = EXCLUDED.quantity_on_hand, last_updated_at = NOW();
+  END LOOP;
+END; $$;
+
+-- Movement recorder gains p_item_condition / p_photo_url / p_reference_number.
+-- The outbound stock check is scoped to the moving condition so damaged stock
+-- can never satisfy a good-stock sale (and vice versa). damage_out is outbound.
+DROP FUNCTION IF EXISTS shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean);
+CREATE OR REPLACE FUNCTION shop_record_movement(
+  p_variant uuid, p_location uuid, p_type text, p_qty int,
+  p_unit_cost numeric DEFAULT NULL, p_reference_type text DEFAULT 'manual',
+  p_sales_channel text DEFAULT NULL, p_marketplace_order text DEFAULT NULL,
+  p_reason text DEFAULT NULL, p_notes text DEFAULT NULL, p_allow_backorder boolean DEFAULT false,
+  p_item_condition text DEFAULT 'good', p_photo_url text DEFAULT NULL, p_reference_number text DEFAULT NULL
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_available int;
+  v_outbound boolean := p_type IN ('sale','transfer_out','return_out','adjustment_out','write_off','damage_out');
+  v_movement uuid;
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity: quantity must be positive'; END IF;
+  IF v_outbound AND NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available FROM shop_stock_levels
+    WHERE variant_id = p_variant AND location_id = p_location AND condition = p_item_condition FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty; END IF;
+  END IF;
+  INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, unit_cost,
+    reference_type, sales_channel, marketplace_order_number, reason_code, notes, item_condition, photo_url, reference_number)
+  VALUES (p_variant, p_location, p_type, p_qty, p_unit_cost, p_reference_type, p_sales_channel,
+    p_marketplace_order, p_reason, p_notes, p_item_condition, p_photo_url, p_reference_number)
+  RETURNING movement_id INTO v_movement;
+  PERFORM shop_recompute_level(p_variant, p_location);
+  RETURN v_movement;
+END; $$;
+REVOKE ALL ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean,text,text,text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean,text,text,text) TO authenticated, service_role;
+
+-- Transfer / Xero sale / Opname read only GOOD stock. Without this guard the
+-- per-condition split turns their `SELECT ... INTO` into a multi-row error and
+-- damaged units would leak into sellable counts.
+CREATE OR REPLACE FUNCTION shop_record_transfer(
+  p_variant uuid, p_from uuid, p_to uuid, p_qty int,
+  p_notes text DEFAULT NULL, p_allow_backorder boolean DEFAULT false,
+  p_sales_staff_id uuid DEFAULT NULL, p_dw_name text DEFAULT NULL, p_photo_url text DEFAULT NULL
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_available int; v_ref uuid := gen_random_uuid();
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+  IF p_from = p_to THEN RAISE EXCEPTION 'same_location'; END IF;
+  IF NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+    FROM shop_stock_levels WHERE variant_id = p_variant AND location_id = p_from AND condition = 'good' FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN
+      RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty;
+    END IF;
+  END IF;
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes, sales_staff_id, dw_name, photo_url)
+  VALUES (p_variant, p_from, p_to, 'transfer_out', p_qty, 'transfer_order', v_ref, p_notes, p_sales_staff_id, p_dw_name, p_photo_url);
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes, sales_staff_id, dw_name, photo_url)
+  VALUES (p_variant, p_to, p_from, 'transfer_in', p_qty, 'transfer_order', v_ref, p_notes, p_sales_staff_id, p_dw_name, p_photo_url);
+  PERFORM shop_recompute_level(p_variant, p_from);
+  PERFORM shop_recompute_level(p_variant, p_to);
+  RETURN v_ref;
+END; $$;
+REVOKE ALL ON FUNCTION shop_record_transfer(uuid,uuid,uuid,int,text,boolean,uuid,text,text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_record_transfer(uuid,uuid,uuid,int,text,boolean,uuid,text,text) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION shop_import_xero_sale(
+  p_location uuid, p_reference text, p_customer text, p_items jsonb, p_allow_backorder boolean DEFAULT false
+) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid; v_qty int; v_desc text; v_available int; v_note text;
+BEGIN
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+  v_note := NULLIF(btrim(coalesce(p_customer, '')), '');
+  v_note := btrim(concat_ws(' — ', v_note, 'Import dari Xero'));
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    v_variant := (v_item->>'variant_id')::uuid; v_qty := (v_item->>'quantity')::int; v_desc := v_item->>'description';
+    IF v_variant IS NULL THEN RAISE EXCEPTION 'invalid_variant'; END IF;
+    IF v_qty IS NULL OR v_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+    IF NOT p_allow_backorder THEN
+      SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+      FROM shop_stock_levels WHERE variant_id = v_variant AND location_id = p_location AND condition = 'good' FOR UPDATE;
+      v_available := COALESCE(v_available, 0);
+      IF v_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: "%" available % < requested %', coalesce(v_desc, ''), v_available, v_qty; END IF;
+    END IF;
+    INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, reference_type, reference_number, sales_channel, notes)
+    VALUES (v_variant, p_location, 'sale', v_qty, 'xero_quotation', NULLIF(btrim(coalesce(p_reference,'')), ''), 'b2b_direct', v_note);
+    PERFORM shop_recompute_level(v_variant, p_location);
+    IF v_desc IS NOT NULL AND length(btrim(v_desc)) > 0 THEN
+      INSERT INTO shop_xero_product_mappings(xero_description, variant_id) VALUES (btrim(v_desc), v_variant)
+      ON CONFLICT (xero_description) DO UPDATE SET variant_id = EXCLUDED.variant_id, updated_at = NOW();
+    END IF;
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END; $$;
+
+CREATE OR REPLACE FUNCTION shop_create_opname(p_location uuid, p_user uuid DEFAULT NULL)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_session uuid := gen_random_uuid();
+BEGIN
+  INSERT INTO shop_stock_opname_sessions(session_id, location_id, status, started_at, created_by)
+  VALUES (v_session, p_location, 'in_progress', NOW(), p_user);
+  INSERT INTO shop_stock_opname_lines(session_id, variant_id, expected_qty)
+  SELECT v_session, sl.variant_id, sl.quantity_on_hand
+  FROM shop_stock_levels sl WHERE sl.location_id = p_location AND sl.condition = 'good';
+  RETURN v_session;
+END; $$;
+
+-- Private bucket for damaged / returned item photos (accessed via signed URLs).
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('item-photos','item-photos', false, 10485760, ARRAY['image/jpeg','image/png','image/webp','image/heic'])
+ON CONFLICT (id) DO NOTHING;
+DROP POLICY IF EXISTS item_photos_insert ON storage.objects;
+CREATE POLICY item_photos_insert ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'item-photos');
+DROP POLICY IF EXISTS item_photos_read ON storage.objects;
+CREATE POLICY item_photos_read ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'item-photos');

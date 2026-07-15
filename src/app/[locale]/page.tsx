@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   XCircle,
   ClipboardList,
+  PackageX,
   ArrowDownToLine,
   ArrowUpFromLine,
   QrCode,
@@ -67,6 +68,12 @@ export default async function DashboardPage() {
       icon: ClipboardList,
       tone: "success",
     },
+    {
+      label: t("damagedUnits"),
+      value: data ? String(data.damagedUnits) : "—",
+      icon: PackageX,
+      tone: "danger",
+    },
   ];
 
   const actions: { label: string; href: string; icon: LucideIcon }[] = [
@@ -92,7 +99,7 @@ export default async function DashboardPage() {
 
       {/* KPI cards. The inventory-value card (index 0) holds a long IDR figure,
           so it spans both mobile columns to avoid clipping. */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         {kpis.map((k, i) => (
           <div
             key={k.label}

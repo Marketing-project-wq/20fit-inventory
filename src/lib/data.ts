@@ -11,7 +11,8 @@ export type Sku = {
   cost_price: number | null;
   selling_price: number | null;
   reorder_point: number | null;
-  on_hand: number;
+  on_hand: number; // sellable (good condition) only
+  damaged: number; // separate damaged stock, not sellable
   status: StockStatus;
 };
 
@@ -21,9 +22,10 @@ export type StockRow = {
   product_name: string;
   location_id: string;
   location_name: string;
-  on_hand: number;
+  on_hand: number; // good
   reserved: number;
   available: number;
+  damaged: number;
   status: StockStatus;
 };
 
@@ -71,7 +73,7 @@ export async function getSnapshot(): Promise<Snapshot | null> {
       sb.from("shop_locations").select("location_id,name"),
       sb
         .from("shop_stock_levels")
-        .select("variant_id,location_id,quantity_on_hand,quantity_reserved,quantity_available"),
+        .select("variant_id,location_id,condition,quantity_on_hand,quantity_reserved,quantity_available"),
     ]);
 
   if (variants.error || products.error || stock.error || locations.error) {
@@ -84,18 +86,48 @@ export async function getSnapshot(): Promise<Snapshot | null> {
   const locById = new Map((locations.data ?? []).map((l) => [l.location_id, l.name]));
   const variantById = new Map((variants.data ?? []).map((v) => [v.variant_id, v]));
 
-  // Sum on-hand per variant across locations.
-  const onHandByVariant = new Map<string, number>();
+  // Aggregate stock per (variant, location), splitting good vs damaged. Only
+  // GOOD stock counts as on-hand / available / sellable.
+  type PairAgg = {
+    variant_id: string;
+    location_id: string;
+    good: number;
+    reserved: number;
+    available: number;
+    damaged: number;
+  };
+  const pairs = new Map<string, PairAgg>();
+  const goodByVariant = new Map<string, number>();
+  const damagedByVariant = new Map<string, number>();
   for (const s of stock.data ?? []) {
-    onHandByVariant.set(
-      s.variant_id,
-      (onHandByVariant.get(s.variant_id) ?? 0) + (s.quantity_on_hand ?? 0),
-    );
+    const key = `${s.variant_id}|${s.location_id}`;
+    let agg = pairs.get(key);
+    if (!agg) {
+      agg = {
+        variant_id: s.variant_id,
+        location_id: s.location_id,
+        good: 0,
+        reserved: 0,
+        available: 0,
+        damaged: 0,
+      };
+      pairs.set(key, agg);
+    }
+    const qty = s.quantity_on_hand ?? 0;
+    if (s.condition === "damaged") {
+      agg.damaged += qty;
+      damagedByVariant.set(s.variant_id, (damagedByVariant.get(s.variant_id) ?? 0) + qty);
+    } else {
+      agg.good += qty;
+      agg.reserved += s.quantity_reserved ?? 0;
+      agg.available += s.quantity_available ?? 0;
+      goodByVariant.set(s.variant_id, (goodByVariant.get(s.variant_id) ?? 0) + qty);
+    }
   }
 
   const skus: Sku[] = (variants.data ?? []).map((v) => {
     const p = productById.get(v.product_id);
-    const on_hand = onHandByVariant.get(v.variant_id) ?? 0;
+    const on_hand = goodByVariant.get(v.variant_id) ?? 0;
     return {
       variant_id: v.variant_id,
       sku_code: v.sku_code,
@@ -106,26 +138,30 @@ export async function getSnapshot(): Promise<Snapshot | null> {
       selling_price: v.selling_price,
       reorder_point: v.reorder_point,
       on_hand,
+      damaged: damagedByVariant.get(v.variant_id) ?? 0,
       status: statusFor(on_hand, v.reorder_point),
     };
   });
   skus.sort((a, b) => a.product_name.localeCompare(b.product_name));
 
-  const stockRows: StockRow[] = (stock.data ?? []).map((s) => {
-    const v = variantById.get(s.variant_id);
-    const p = v ? productById.get(v.product_id) : undefined;
-    return {
-      variant_id: s.variant_id,
-      sku_code: v?.sku_code ?? "—",
-      product_name: p?.name ?? "—",
-      location_id: s.location_id,
-      location_name: locById.get(s.location_id) ?? "—",
-      on_hand: s.quantity_on_hand ?? 0,
-      reserved: s.quantity_reserved ?? 0,
-      available: s.quantity_available ?? 0,
-      status: statusFor(s.quantity_on_hand ?? 0, v?.reorder_point ?? null),
-    };
-  });
+  const stockRows: StockRow[] = [...pairs.values()]
+    .filter((a) => a.good > 0 || a.damaged > 0)
+    .map((a) => {
+      const v = variantById.get(a.variant_id);
+      const p = v ? productById.get(v.product_id) : undefined;
+      return {
+        variant_id: a.variant_id,
+        sku_code: v?.sku_code ?? "—",
+        product_name: p?.name ?? "—",
+        location_id: a.location_id,
+        location_name: locById.get(a.location_id) ?? "—",
+        on_hand: a.good,
+        reserved: a.reserved,
+        available: a.available,
+        damaged: a.damaged,
+        status: statusFor(a.good, v?.reorder_point ?? null),
+      };
+    });
 
   return {
     skus,
@@ -182,6 +218,7 @@ export type DashboardData = {
   belowReorder: number;
   outOfStock: number;
   openPurchaseOrders: number;
+  damagedUnits: number;
   watchlist: Sku[];
   recent: Movement[];
 };
@@ -212,11 +249,14 @@ export async function getDashboard(): Promise<DashboardData | null> {
     .sort((a, b) => a.on_hand - b.on_hand)
     .slice(0, 10);
 
+  const damagedUnits = snapshot.skus.reduce((sum, s) => sum + s.damaged, 0);
+
   return {
     totalInventoryValue,
     belowReorder,
     outOfStock,
     openPurchaseOrders,
+    damagedUnits,
     watchlist,
     recent,
   };
@@ -240,6 +280,8 @@ export async function getTrendMovements(): Promise<
   const { data, error } = await sb
     .from("shop_stock_movements")
     .select("movement_type,quantity,performed_at")
+    // Trend tracks sellable (good) stock flow; damaged goods are a separate pool.
+    .eq("item_condition", "good")
     .order("performed_at", { ascending: true })
     .limit(10000);
   if (error) return null;
@@ -259,6 +301,9 @@ export async function getReportSource(): Promise<{
   const { data, error } = await sb
     .from("shop_stock_movements")
     .select("variant_id,movement_type,quantity,sales_channel,performed_at")
+    // Reports reconcile against good (sellable) on-hand; exclude damaged movements
+    // so opening/in/out/closing balances stay consistent with the stock snapshot.
+    .eq("item_condition", "good")
     .order("performed_at", { ascending: true })
     .limit(10000);
   if (error) return null;
