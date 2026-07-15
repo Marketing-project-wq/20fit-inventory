@@ -72,7 +72,7 @@ export function DiffButton({ before, after }: { before: Json; after: Json }) {
             role="dialog"
             aria-modal="true"
             aria-label={t("diffTitle")}
-            className="fixed left-1/2 top-1/2 z-50 max-h-[80vh] w-full max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-surface-solid shadow-xl"
+            className="fixed left-1/2 top-1/2 z-50 max-h-[80dvh] w-full max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-surface-solid shadow-xl"
           >
             <div className="sticky top-0 flex items-center justify-between border-b border-border bg-surface-solid px-5 py-4">
               <h3 className="text-base font-bold text-fg">{t("diffTitle")}</h3>
