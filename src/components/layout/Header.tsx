@@ -33,10 +33,11 @@ export function Header({ onMenu }: { onMenu: () => void }) {
 
       <Link
         href="/scan"
-        className="hidden items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-muted transition-colors hover:border-accent hover:text-fg sm:flex"
+        aria-label={t("scanQR")}
+        className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-sm text-muted transition-colors hover:border-accent hover:text-fg sm:px-3"
       >
         <QrCode size={16} />
-        <span>{t("scanQR")}</span>
+        <span className="hidden sm:inline">{t("scanQR")}</span>
       </Link>
       <button
         className="text-muted transition-colors hover:text-fg"

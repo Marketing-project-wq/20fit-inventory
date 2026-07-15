@@ -26,10 +26,12 @@ export function BarangMasukTabs({
   skus,
   locations,
   recent,
+  preselectVariantId,
 }: {
   skus: Opt[];
   locations: Loc[];
   recent: Movement[];
+  preselectVariantId?: string;
 }) {
   const tf = useTranslations("form");
   const ti = useTranslations("import");
@@ -48,7 +50,12 @@ export function BarangMasukTabs({
       </Tabs.List>
 
       <Tabs.Content value="manual" className="focus:outline-none">
-        <GoodsInManual skus={skus} locations={locations} recent={recent} />
+        <GoodsInManual
+          skus={skus}
+          locations={locations}
+          recent={recent}
+          preselectVariantId={preselectVariantId}
+        />
       </Tabs.Content>
       <Tabs.Content value="packing" className="focus:outline-none">
         <PackingListImport skus={skus} locations={locations} />

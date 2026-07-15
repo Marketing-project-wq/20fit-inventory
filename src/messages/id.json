@@ -478,7 +478,9 @@
     "lookupError": "Gagal memuat data. Coba scan lagi.",
     "unauthorized": "Sesi berakhir. Silakan masuk kembali.",
     "cameraError": "Tidak dapat mengakses kamera. Pastikan izin kamera telah diberikan.",
-    "scanAgain": "Scan Lagi"
+    "scanAgain": "Scan Lagi",
+    "prefilledTitle": "SKU Terisi dari Scan",
+    "prefilledHint": "{sku} · lengkapi jumlah lalu simpan"
   },
   "settings": {
     "subtitle": "Kelola SKU & harga, lokasi gudang, dan akun Anda.",

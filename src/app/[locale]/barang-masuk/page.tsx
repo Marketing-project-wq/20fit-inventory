@@ -14,7 +14,11 @@ const IN_TYPES = [
   "damage_in",
 ];
 
-export default async function BarangMasukPage() {
+export default async function BarangMasukPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ variant?: string }>;
+}) {
   const t = await getTranslations("nav");
   const td = await getTranslations("dashboard");
   const snap = await getSnapshot();
@@ -22,6 +26,11 @@ export default async function BarangMasukPage() {
     (await getMovements(250))
       ?.filter((m) => IN_TYPES.includes(m.movement_type))
       .slice(0, 12) ?? [];
+
+  // Pre-fill from a QR scan (?variant=…), validated against the SKU list.
+  const { variant } = await searchParams;
+  const preselectVariantId =
+    variant && snap?.skus.some((s) => s.variant_id === variant) ? variant : undefined;
 
   return (
     <div className="space-y-6">
@@ -37,6 +46,7 @@ export default async function BarangMasukPage() {
           skus={snap.skus}
           locations={snap.locations}
           recent={recent}
+          preselectVariantId={preselectVariantId}
         />
       )}
     </div>

@@ -18,12 +18,26 @@ import { cn, formatIDR } from "@/lib/utils";
 import { StockBadge } from "@/components/badges";
 
 // Result shapes returned by GET /api/lookup/<sku>.
-type StockLine = { location: string; on_hand: number; available: number };
+type StockLine = {
+  location: string;
+  good: number;
+  damaged: number;
+  available: number;
+};
 type LookupFound = {
   found: true;
+  variant_id: string;
   sku_code: string;
   product_name: string;
+  category_name: string | null;
+  brand_name: string | null;
+  unit: string;
+  cost_price: number | null;
   selling_price: number | null;
+  total_good: number;
+  total_damaged: number;
+  is_out_of_stock: boolean;
+  is_low_stock: boolean;
   stock: StockLine[];
 };
 type LookupResult =
@@ -38,6 +52,7 @@ export function QrScanner() {
   const t = useTranslations("scan");
   const tp = useTranslations("product");
   const tc = useTranslations("common");
+  const ts = useTranslations("stock");
 
   const [phase, setPhase] = useState<Phase>("ready");
   const [result, setResult] = useState<LookupResult | null>(null);
@@ -267,12 +282,78 @@ export function QrScanner() {
                 <h2 className="mt-1.5 text-lg font-semibold text-fg">
                   {found.product_name}
                 </h2>
-                {found.selling_price != null && (
-                  <p className="mt-0.5 font-mono text-sm text-muted">
-                    {formatIDR(found.selling_price)}
+                {(found.category_name || found.brand_name) && (
+                  <p className="mt-0.5 text-xs text-muted">
+                    {[found.category_name, found.brand_name]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 )}
               </div>
+
+              {/* Stock status summary. Static class strings so the Tailwind JIT
+                  picks them up (no dynamic `text-${tone}` interpolation). */}
+              {(() => {
+                const s = found.is_out_of_stock
+                  ? {
+                      box: "border-danger/40 bg-danger/10",
+                      text: "text-danger",
+                      label: ts("outOfStock"),
+                    }
+                  : found.is_low_stock
+                    ? {
+                        box: "border-warning/40 bg-warning/10",
+                        text: "text-warning",
+                        label: ts("lowStock"),
+                      }
+                    : {
+                        box: "border-success/40 bg-success/10",
+                        text: "text-success",
+                        label: ts("inStock"),
+                      };
+                return (
+                  <div
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${s.box}`}
+                  >
+                    <span className={`font-display text-xs font-bold ${s.text}`}>
+                      {s.label}
+                    </span>
+                    <span className="text-right">
+                      <span className={`font-mono text-xl font-bold ${s.text}`}>
+                        {found.total_good}
+                      </span>
+                      <span className="ml-1 text-xs text-muted">{found.unit}</span>
+                      {found.total_damaged > 0 && (
+                        <span className="ml-2 text-xs text-danger">
+                          +{found.total_damaged} {ts("conditionDamaged").toLowerCase()}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {/* Prices */}
+              {(found.cost_price != null || found.selling_price != null) && (
+                <div className="grid grid-cols-2 gap-2">
+                  {found.cost_price != null && (
+                    <div className="rounded-lg bg-surface-2 px-3 py-2">
+                      <p className="text-xs text-muted">{tp("costPrice")}</p>
+                      <p className="mt-0.5 font-mono text-sm font-semibold text-fg">
+                        {formatIDR(found.cost_price)}
+                      </p>
+                    </div>
+                  )}
+                  {found.selling_price != null && (
+                    <div className="rounded-lg bg-surface-2 px-3 py-2">
+                      <p className="text-xs text-muted">{tp("sellingPrice")}</p>
+                      <p className="mt-0.5 font-mono text-sm font-semibold text-fg">
+                        {formatIDR(found.selling_price)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
@@ -284,7 +365,10 @@ export function QrScanner() {
                       <tr className="text-left text-xs text-muted">
                         <th className="pb-1.5 font-medium">{tc("location")}</th>
                         <th className="pb-1.5 text-right font-medium">
-                          {tp("stockOnHand")}
+                          {ts("goodStock")}
+                        </th>
+                        <th className="pb-1.5 text-right font-medium">
+                          {ts("damagedStock")}
                         </th>
                         <th className="pb-1.5 text-right font-medium">
                           {tc("available")}
@@ -295,8 +379,13 @@ export function QrScanner() {
                       {found.stock.map((s) => (
                         <tr key={s.location} className="border-t border-border">
                           <td className="py-1.5 text-fg">{s.location}</td>
+                          <td className="py-1.5 text-right font-mono">{s.good}</td>
                           <td className="py-1.5 text-right font-mono">
-                            {s.on_hand}
+                            {s.damaged > 0 ? (
+                              <span className="text-danger">{s.damaged}</span>
+                            ) : (
+                              <span className="text-dim">—</span>
+                            )}
                           </td>
                           <td className="py-1.5 text-right">
                             <StockBadge
@@ -323,12 +412,12 @@ export function QrScanner() {
 
               <div className="grid grid-cols-3 gap-2 pt-1">
                 <ActionLink
-                  href="/barang-masuk"
+                  href={`/barang-masuk?variant=${found.variant_id}`}
                   icon={ArrowDownToLine}
                   label={t("receive")}
                 />
                 <ActionLink
-                  href="/barang-keluar"
+                  href={`/barang-keluar?variant=${found.variant_id}`}
                   icon={ArrowUpFromLine}
                   label={t("issue")}
                 />

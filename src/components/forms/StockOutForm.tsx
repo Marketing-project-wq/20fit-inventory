@@ -8,7 +8,15 @@ import { Field, Alert, inputCls } from "./ui";
 type Opt = { variant_id: string; sku_code: string; product_name: string };
 type Loc = { location_id: string; name: string };
 
-export function StockOutForm({ skus, locations }: { skus: Opt[]; locations: Loc[] }) {
+export function StockOutForm({
+  skus,
+  locations,
+  preselectVariantId,
+}: {
+  skus: Opt[];
+  locations: Loc[];
+  preselectVariantId?: string;
+}) {
   const t = useTranslations("form");
   const tc = useTranslations("common");
   const ts = useTranslations("stock");
@@ -49,7 +57,12 @@ export function StockOutForm({ skus, locations }: { skus: Opt[]; locations: Loc[
       )}
 
       <Field label={t("sku")}>
-        <select name="variant_id" required defaultValue="" className={inputCls}>
+        <select
+          name="variant_id"
+          required
+          defaultValue={preselectVariantId ?? ""}
+          className={inputCls}
+        >
           <option value="" disabled>
             {t("selectSku")}
           </option>
@@ -77,7 +90,14 @@ export function StockOutForm({ skus, locations }: { skus: Opt[]; locations: Loc[
           </select>
         </Field>
         <Field label={tc("quantity")}>
-          <input name="quantity" type="number" min={1} required className={inputCls} />
+          <input
+            name="quantity"
+            type="number"
+            min={1}
+            required
+            autoFocus={Boolean(preselectVariantId)}
+            className={inputCls}
+          />
         </Field>
       </div>
 
