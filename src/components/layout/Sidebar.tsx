@@ -34,8 +34,12 @@ export function Sidebar({
           "fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border bg-surface transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
+        style={{ paddingLeft: "var(--safe-left)" }}
       >
-        <div className="flex h-16 items-center gap-2.5 border-b border-border px-5">
+        <div
+          className="flex h-16 items-center gap-2.5 border-b border-border px-5"
+          style={{ height: "calc(4rem + var(--safe-top))", paddingTop: "var(--safe-top)" }}
+        >
           <Logo20FIT height={26} />
           <button
             onClick={onClose}
@@ -69,7 +73,10 @@ export function Sidebar({
           })}
         </nav>
 
-        <div className="border-t border-border p-3">
+        <div
+          className="border-t border-border p-3"
+          style={{ paddingBottom: "calc(0.75rem + var(--safe-bottom))" }}
+        >
           <LogoutButton />
           <div className="mt-2 px-3 text-xs text-dim">v0.3 · PRD v1.4</div>
         </div>

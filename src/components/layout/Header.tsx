@@ -10,7 +10,14 @@ import { Logo20FIT } from "./Logo20FIT";
 export function Header({ onMenu }: { onMenu: () => void }) {
   const t = useTranslations("dashboard");
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur sm:px-6">
+    <header
+      className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur sm:px-6"
+      style={{
+        // Keep the header clear of the notch/status bar in standalone mode.
+        paddingTop: "var(--safe-top)",
+        height: "calc(4rem + var(--safe-top))",
+      }}
+    >
       <button
         onClick={onMenu}
         className="text-muted hover:text-fg lg:hidden"
