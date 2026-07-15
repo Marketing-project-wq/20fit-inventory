@@ -449,7 +449,7 @@ CREATE OR REPLACE FUNCTION shop_import_packing_list(
   p_items jsonb,          -- [{variant_id, quantity, unit_cost, description}]
   p_reference text DEFAULT NULL
 ) RETURNS int LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_item jsonb; v_count int := 0; v_variant uuid; v_desc text;
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid; v_desc text; v_cost numeric;
 BEGIN
   IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
@@ -457,9 +457,14 @@ BEGIN
   LOOP
     v_variant := (v_item->>'variant_id')::uuid;
     v_desc := v_item->>'description';
+    -- Fall back to the SKU's master cost_price when the file row has no price.
+    v_cost := COALESCE(
+      NULLIF(v_item->>'unit_cost','')::numeric,
+      (SELECT cost_price FROM shop_product_variants WHERE variant_id = v_variant)
+    );
     PERFORM shop_record_movement(
       v_variant, p_location, 'purchase_receipt',
-      (v_item->>'quantity')::int, NULLIF(v_item->>'unit_cost','')::numeric,
+      (v_item->>'quantity')::int, v_cost,
       'bulk_import', NULL, NULL, NULL, p_reference, false);
     IF v_variant IS NOT NULL AND v_desc IS NOT NULL AND length(btrim(v_desc)) > 0 THEN
       INSERT INTO shop_packing_list_mappings(source_description, variant_id)

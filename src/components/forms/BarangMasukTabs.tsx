@@ -9,7 +9,12 @@ import { RecentMovements } from "@/components/movements/RecentMovements";
 import type { Movement } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
-type Opt = { variant_id: string; sku_code: string; product_name: string };
+type Opt = {
+  variant_id: string;
+  sku_code: string;
+  product_name: string;
+  cost_price?: number | null;
+};
 type Loc = { location_id: string; name: string };
 
 const triggerCls = cn(
