@@ -4,7 +4,12 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Sparkles } from "lucide-react";
 import { recordStockIn, type ActionState } from "@/lib/actions";
+import { cn } from "@/lib/utils";
 import { Field, Alert, inputCls } from "./ui";
+
+// Group digits with Indonesian thousands separators for display (e.g. 3.402.000).
+const groupID = (raw: string) =>
+  raw === "" ? "" : new Intl.NumberFormat("id-ID").format(Number(raw));
 
 type Opt = {
   variant_id: string;
@@ -44,7 +49,8 @@ export function StockInForm({ skus, locations }: { skus: Opt[]; locations: Loc[]
   function onSkuChange(id: string) {
     setVariantId(id);
     const sku = skus.find((s) => s.variant_id === id);
-    setUnitCost(sku?.cost_price != null ? String(sku.cost_price) : "");
+    // Store as clean integer-rupiah digits; the field formats it for display.
+    setUnitCost(sku?.cost_price != null ? String(Math.round(Number(sku.cost_price))) : "");
   }
 
   const numCost = unitCost === "" ? null : Number(unitCost);
@@ -117,14 +123,15 @@ export function StockInForm({ skus, locations }: { skus: Opt[]; locations: Loc[]
         <div>
           <Field label={t("unitCost")} hint={t("optional")}>
             <input
-              name="unit_cost"
-              type="number"
-              min={0}
-              step="any"
-              value={unitCost}
-              onChange={(e) => setUnitCost(e.target.value)}
-              className={inputCls}
+              type="text"
+              inputMode="numeric"
+              value={groupID(unitCost)}
+              onChange={(e) => setUnitCost(e.target.value.replace(/\D/g, ""))}
+              placeholder="0"
+              className={cn(inputCls, "font-mono tabular-nums")}
             />
+            {/* Submit the clean numeric value; the visible field is formatted. */}
+            <input type="hidden" name="unit_cost" value={unitCost} />
           </Field>
           {costHint && (
             <span className={`mt-1 flex items-center gap-1 text-xs ${costHint.tone}`}>
