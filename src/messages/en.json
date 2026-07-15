@@ -45,6 +45,9 @@
     "costPrice": "Cost Price",
     "sellingPrice": "Selling Price",
     "stockOnHand": "Stock on Hand",
+    "addSku": "Add SKU",
+    "addSkuNew": "Add New SKU",
+    "quickAdd": "Add",
     "reorderPoint": "Reorder Point",
     "qrCode": "QR Code / Barcode",
     "downloadQR": "Download QR Code",
@@ -228,7 +231,8 @@
     "all": "All",
     "sortBy": "Sort",
     "resetFilters": "Reset filters",
-    "showing": "Showing {count} of {total}"
+    "showing": "Showing {count} of {total}",
+    "row": "Row"
   },
   "form": {
     "sku": "SKU",
@@ -418,6 +422,27 @@
     "salesStaffDeleteConfirm": "Remove \"{name}\" from the Sales Staff list?",
     "salesStaffExists": "That name is already in the list.",
     "salesStaffInUse": "Can't delete — this name is already used in transfer or access records. Deactivate it instead.",
-    "noSalesStaff": "No sales staff yet. Add a name above."
+    "noSalesStaff": "No sales staff yet. Add a name above.",
+    "bulkImport": "Bulk Import SKUs",
+    "bulkImportDesc": "Upload an Excel or CSV file of new SKUs. Review before confirming.",
+    "downloadTemplateXlsx": "Excel Template",
+    "downloadTemplateCsv": "CSV Template",
+    "dropFileHere": "Drag a file here or click to choose",
+    "supportedFormats": "Excel (.xlsx) or CSV (.csv) · use the template above",
+    "parsing": "Reading file...",
+    "importing": "Saving to database...",
+    "previewTotal": "Total Rows",
+    "validRows": "Valid Rows",
+    "errorRows": "Error Rows",
+    "statusCreate": "NEW",
+    "statusUpdate": "UPDATE",
+    "statusError": "ERROR",
+    "andMoreRows": "... and {n} more rows",
+    "importNValidSku": "Import {n} Valid SKUs",
+    "importDone": "Import complete",
+    "importSummary": "{created} new · {updated} updated · {failed} failed",
+    "importAnotherFile": "Import Another File",
+    "importTooLarge": "File must be 5MB or smaller.",
+    "importParseFailed": "Couldn't read the file. Make sure it matches the template."
   }
 }
