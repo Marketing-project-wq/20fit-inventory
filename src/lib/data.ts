@@ -272,11 +272,49 @@ export type AccessLog = {
   location_id: string;
   location_name: string;
   visitor_name: string | null;
+  sales_staff_name: string | null;
+  dw_name: string | null;
   purpose: string | null;
   notes: string | null;
   check_in_at: string;
   check_out_at: string | null;
 };
+
+/** Active sales staff for the Transfer / Warehouse Access dropdowns. */
+export type SalesStaffOption = { staff_id: string; name: string };
+
+export async function getSalesStaff(): Promise<SalesStaffOption[]> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("shop_sales_staff")
+    .select("staff_id,name")
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("name");
+  if (error) return [];
+  return data ?? [];
+}
+
+/** Full sales-staff registry for the Settings → Sales Staff tab. */
+export type SalesStaff = {
+  staff_id: string;
+  name: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export async function getSalesStaffAdmin(): Promise<SalesStaff[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  const { data, error } = await sb
+    .from("shop_sales_staff")
+    .select("staff_id,name,is_active,sort_order")
+    .order("sort_order")
+    .order("name");
+  if (error) return null;
+  return data ?? [];
+}
 
 /** Locations for select inputs (lightweight). */
 export async function getLocations(): Promise<
@@ -296,25 +334,95 @@ export async function getLocations(): Promise<
 export async function getAccessLogs(limit = 100): Promise<AccessLog[] | null> {
   const sb = await createSupabaseServerClient();
   if (!sb) return null;
-  const [logs, locations] = await Promise.all([
+  const [logs, locations, salesStaff] = await Promise.all([
     sb
       .from("shop_warehouse_access_log")
-      .select("log_id,location_id,visitor_name,purpose,notes,check_in_at,check_out_at")
+      .select(
+        "log_id,location_id,visitor_name,sales_staff_id,dw_name,purpose,notes,check_in_at,check_out_at",
+      )
       .order("check_in_at", { ascending: false })
       .limit(limit),
     sb.from("shop_locations").select("location_id,name"),
+    sb.from("shop_sales_staff").select("staff_id,name"),
   ]);
   if (logs.error) return null;
   const locName = new Map((locations.data ?? []).map((l) => [l.location_id, l.name]));
+  const staffName = new Map(
+    (salesStaff.data ?? []).map((s) => [s.staff_id, s.name]),
+  );
   return (logs.data ?? []).map((l) => ({
     log_id: l.log_id,
     location_id: l.location_id,
     location_name: locName.get(l.location_id) ?? "—",
     visitor_name: l.visitor_name,
+    sales_staff_name: l.sales_staff_id
+      ? (staffName.get(l.sales_staff_id) ?? null)
+      : null,
+    dw_name: l.dw_name,
     purpose: l.purpose,
     notes: l.notes,
     check_in_at: l.check_in_at,
     check_out_at: l.check_out_at,
+  }));
+}
+
+/** Recent stock transfers with sales-staff name and a signed proof-photo URL. */
+export type RecentTransfer = {
+  movement_id: string;
+  sku_code: string;
+  quantity: number;
+  performed_at: string;
+  sales_staff_name: string | null;
+  dw_name: string | null;
+  photo_url: string | null;
+};
+
+export async function getRecentTransfers(limit = 12): Promise<RecentTransfer[]> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from("shop_stock_movements")
+    .select(
+      "movement_id,variant_id,quantity,performed_at,sales_staff_id,dw_name,photo_url",
+    )
+    .eq("movement_type", "transfer_out")
+    .order("performed_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+
+  const variantIds = [...new Set(data.map((m) => m.variant_id))];
+  const staffIds = [
+    ...new Set(data.map((m) => m.sales_staff_id).filter(Boolean)),
+  ] as string[];
+  const [variants, salesStaff] = await Promise.all([
+    sb.from("shop_product_variants").select("variant_id,sku_code").in("variant_id", variantIds),
+    staffIds.length
+      ? sb.from("shop_sales_staff").select("staff_id,name").in("staff_id", staffIds)
+      : Promise.resolve({ data: [] as { staff_id: string; name: string }[] }),
+  ]);
+  const skuOf = new Map((variants.data ?? []).map((v) => [v.variant_id, v.sku_code]));
+  const nameOf = new Map((salesStaff.data ?? []).map((s) => [s.staff_id, s.name]));
+
+  // Sign the private-bucket paths so thumbnails render (valid 1 hour).
+  const paths = data.map((m) => m.photo_url).filter(Boolean) as string[];
+  const signed = new Map<string, string>();
+  if (paths.length) {
+    const { data: urls } = await sb.storage
+      .from("transfer-photos")
+      .createSignedUrls(paths, 3600);
+    for (const u of urls ?? []) {
+      if (u.signedUrl && u.path) signed.set(u.path, u.signedUrl);
+    }
+  }
+
+  return data.map((m) => ({
+    movement_id: m.movement_id,
+    sku_code: skuOf.get(m.variant_id) ?? "—",
+    quantity: m.quantity,
+    performed_at: m.performed_at,
+    sales_staff_name: m.sales_staff_id ? (nameOf.get(m.sales_staff_id) ?? null) : null,
+    dw_name: m.dw_name,
+    photo_url: m.photo_url ? (signed.get(m.photo_url) ?? null) : null,
   }));
 }
 

@@ -4,11 +4,19 @@ import { useActionState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { LogIn } from "lucide-react";
 import { checkInAccess, type ActionState } from "@/lib/actions";
+import { SalesStaffSelect } from "@/components/ui/SalesStaffSelect";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
 
 type Loc = { location_id: string; name: string };
+type Sales = { staff_id: string; name: string };
 
-export function CheckInForm({ locations }: { locations: Loc[] }) {
+export function CheckInForm({
+  locations,
+  salesStaff,
+}: {
+  locations: Loc[];
+  salesStaff: Sales[];
+}) {
   const t = useTranslations("access");
   const tc = useTranslations("common");
   const tf = useTranslations("form");
@@ -34,15 +42,11 @@ export function CheckInForm({ locations }: { locations: Loc[] }) {
         </Alert>
       )}
 
-      <Field label={t("visitorName")}>
-        <input
-          name="visitor_name"
-          required
-          maxLength={200}
-          placeholder={t("visitorPlaceholder")}
-          className={inputCls}
-        />
-      </Field>
+      <SalesStaffSelect
+        staff={salesStaff}
+        label={t("salesOrVisitor")}
+        required
+      />
 
       <Field label={tc("location")}>
         <select

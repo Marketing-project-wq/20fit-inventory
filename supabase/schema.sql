@@ -613,3 +613,83 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', fn);
   END LOOP;
 END $$;
+
+-- ============================================================================
+-- MIGRATION (2026-07): Sales staff picklist + transfer proof photo + access
+-- visitor as sales/DW. Applied to the live DB; kept here idempotently so a
+-- fresh provision reproduces it.
+-- ============================================================================
+
+-- Sales staff = names for the Transfer / Warehouse Access dropdowns.
+-- Distinct from shop_staff (login accounts).
+CREATE TABLE IF NOT EXISTS shop_sales_staff (
+  staff_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT NOT NULL,
+  is_active  BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT shop_sales_staff_name_unique UNIQUE (name)
+);
+ALTER TABLE shop_sales_staff ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_sales_staff_read ON shop_sales_staff;
+CREATE POLICY shop_sales_staff_read ON shop_sales_staff FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS shop_sales_staff_write ON shop_sales_staff;
+CREATE POLICY shop_sales_staff_write ON shop_sales_staff FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT SELECT, INSERT, UPDATE, DELETE ON shop_sales_staff TO authenticated;
+
+INSERT INTO shop_sales_staff (name, sort_order) VALUES
+  ('Fandi', 1), ('Yonatan', 2), ('Riztira', 3)
+ON CONFLICT (name) DO NOTHING;
+
+-- Warehouse access: visitor is a sales staff or a daily worker.
+-- visitor_name kept as fallback for historical rows.
+ALTER TABLE shop_warehouse_access_log
+  ADD COLUMN IF NOT EXISTS sales_staff_id UUID REFERENCES shop_sales_staff(staff_id),
+  ADD COLUMN IF NOT EXISTS dw_name TEXT;
+
+-- Transfers: who moved it + proof photo. (ADD COLUMN is allowed; the append-only
+-- trigger only blocks UPDATE/DELETE of existing rows.)
+ALTER TABLE shop_stock_movements
+  ADD COLUMN IF NOT EXISTS sales_staff_id UUID REFERENCES shop_sales_staff(staff_id),
+  ADD COLUMN IF NOT EXISTS dw_name TEXT,
+  ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+-- Transfer RPC now records sales staff / DW / photo on both legs.
+DROP FUNCTION IF EXISTS shop_record_transfer(uuid,uuid,uuid,int,text,boolean);
+CREATE OR REPLACE FUNCTION shop_record_transfer(
+  p_variant uuid, p_from uuid, p_to uuid, p_qty int,
+  p_notes text DEFAULT NULL, p_allow_backorder boolean DEFAULT false,
+  p_sales_staff_id uuid DEFAULT NULL, p_dw_name text DEFAULT NULL, p_photo_url text DEFAULT NULL
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_available int; v_ref uuid := gen_random_uuid();
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+  IF p_from = p_to THEN RAISE EXCEPTION 'same_location'; END IF;
+  IF NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+    FROM shop_stock_levels WHERE variant_id = p_variant AND location_id = p_from FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN
+      RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty;
+    END IF;
+  END IF;
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes, sales_staff_id, dw_name, photo_url)
+  VALUES (p_variant, p_from, p_to, 'transfer_out', p_qty, 'transfer_order', v_ref, p_notes, p_sales_staff_id, p_dw_name, p_photo_url);
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes, sales_staff_id, dw_name, photo_url)
+  VALUES (p_variant, p_to, p_from, 'transfer_in', p_qty, 'transfer_order', v_ref, p_notes, p_sales_staff_id, p_dw_name, p_photo_url);
+  PERFORM shop_recompute_level(p_variant, p_from);
+  PERFORM shop_recompute_level(p_variant, p_to);
+  RETURN v_ref;
+END; $$;
+REVOKE ALL ON FUNCTION shop_record_transfer(uuid,uuid,uuid,int,text,boolean,uuid,text,text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_record_transfer(uuid,uuid,uuid,int,text,boolean,uuid,text,text) TO authenticated, service_role;
+
+-- Private bucket for transfer proof photos (accessed via signed URLs).
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('transfer-photos','transfer-photos', false, 5242880, ARRAY['image/jpeg','image/png','image/webp','image/heic'])
+ON CONFLICT (id) DO NOTHING;
+DROP POLICY IF EXISTS transfer_photos_insert ON storage.objects;
+CREATE POLICY transfer_photos_insert ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'transfer-photos');
+DROP POLICY IF EXISTS transfer_photos_read ON storage.objects;
+CREATE POLICY transfer_photos_read ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'transfer-photos');

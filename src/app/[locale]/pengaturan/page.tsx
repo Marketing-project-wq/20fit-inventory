@@ -7,6 +7,7 @@ import {
   getBrands,
   getStaff,
   getCurrentStaff,
+  getSalesStaffAdmin,
 } from "@/lib/data";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
 
@@ -17,13 +18,14 @@ export default async function PengaturanPage() {
   const ts = await getTranslations("settings");
   const td = await getTranslations("dashboard");
 
-  const [skus, locations, categories, brands, staff, current] =
+  const [skus, locations, categories, brands, staff, salesStaff, current] =
     await Promise.all([
       getSkuAdmin(),
       getLocationsAdmin(),
       getCategories(),
       getBrands(),
       getStaff(),
+      getSalesStaffAdmin(),
       getCurrentStaff(),
     ]);
   const canManageStaff = current.role === null || current.role === "admin";
@@ -47,6 +49,7 @@ export default async function PengaturanPage() {
           categories={categories.map((c) => ({ id: c.category_id, name: c.name }))}
           brands={brands.map((b) => ({ id: b.brand_id, name: b.name }))}
           staff={staff ?? []}
+          salesStaff={salesStaff ?? []}
           canManageStaff={canManageStaff}
           email={current.email}
           role={current.role}
