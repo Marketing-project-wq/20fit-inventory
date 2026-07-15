@@ -24,6 +24,7 @@
   --bg: rgba(255, 255, 255, 0.66); /* inputs / header */
   --surface: rgba(255, 255, 255, 0.55); /* glass cards */
   --surface-2: rgba(255, 255, 255, 0.72); /* glass-strong / thead */
+  --surface-solid: #ffffff; /* opaque — modals/drawers over content */
   --border: rgba(29, 29, 31, 0.1); /* dividers */
   --glass-rim: rgba(255, 255, 255, 0.9); /* bright card edge */
 
@@ -54,6 +55,7 @@
   --bg: rgba(255, 255, 255, 0.08);
   --surface: rgba(255, 255, 255, 0.06);
   --surface-2: rgba(255, 255, 255, 0.1);
+  --surface-solid: #1c1c1e; /* opaque — modals/drawers over content */
   --border: rgba(255, 255, 255, 0.1);
   --glass-rim: rgba(255, 255, 255, 0.14);
 
@@ -78,6 +80,7 @@
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-solid: var(--surface-solid);
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-dim: var(--accent-dim);

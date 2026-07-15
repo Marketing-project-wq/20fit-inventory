@@ -48,9 +48,9 @@ export function AddSkuButton({
             role="dialog"
             aria-modal="true"
             aria-label={t("addSkuNew")}
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l border-border bg-surface shadow-xl"
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l border-border bg-surface-solid shadow-xl"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface px-5 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface-solid px-5 py-4">
               <h2 className="text-base font-bold text-fg">{t("addSkuNew")}</h2>
               <button
                 onClick={() => setOpen(false)}
