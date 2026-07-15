@@ -226,6 +226,134 @@ export async function recordStockOut(
   return { ok: true, message: "saved" };
 }
 
+// -------------------- Warranty / repair goods-out --------------------------
+const warrantyOutSchema = z.object({
+  variant_id: z.string().uuid(),
+  location_id: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+  reason_code: z.string().trim().min(1).max(60),
+  reason_other: z.string().trim().max(200).optional(),
+  supplier_name: z.string().trim().min(1).max(200),
+  claim_number: z.string().trim().max(120).optional(),
+  notes: z.string().trim().max(500).optional(),
+  unit_cost: optionalNumber,
+});
+
+export async function recordWarrantyOut(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { sb, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  const parsed = warrantyOutSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+  const reason =
+    d.reason_code === "other" ? d.reason_other?.trim() || "other" : d.reason_code;
+
+  // Optional documentation photo of the item before shipping.
+  let photoPath: string | null = null;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    const up = await uploadItemPhoto(sb!, photo, "warranty");
+    if (up.error) return { ok: false, error: up.error };
+    photoPath = up.path!;
+  }
+
+  const { data, error } = await sb!.rpc("shop_record_warranty_out", {
+    p_variant: d.variant_id,
+    p_location: d.location_id,
+    p_qty: d.quantity,
+    p_reason: reason,
+    p_notes: d.notes ?? null,
+    p_supplier_name: d.supplier_name,
+    p_claim_number: d.claim_number || null,
+    p_photo_url: photoPath,
+    p_unit_cost: d.unit_cost ?? null,
+  });
+  if (error) {
+    if (error.message.includes("insufficient_damaged_stock"))
+      return { ok: false, error: "insufficient_damaged_stock" };
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/", "layout");
+  const claimNumber =
+    data && typeof data === "object" ? (data as { claim_number?: string }).claim_number : undefined;
+  return { ok: true, message: claimNumber ?? "saved" };
+}
+
+// Disposal (damage_out, from damaged) & return-to-supplier (return_out, from good).
+// Both route through the generic recorder; the `kind` field picks type + pool.
+const conditionOutSchema = z.object({
+  kind: z.enum(["disposal", "return_supplier"]),
+  variant_id: z.string().uuid(),
+  location_id: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+  notes: z.string().trim().max(500).optional(),
+  reference_number: z.string().trim().max(120).optional(),
+});
+
+export async function recordConditionOut(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { sb, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  const parsed = conditionOutSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+  const disposal = d.kind === "disposal";
+
+  const { error } = await sb!.rpc("shop_record_movement", {
+    p_variant: d.variant_id,
+    p_location: d.location_id,
+    p_type: disposal ? "damage_out" : "return_out",
+    p_qty: d.quantity,
+    p_reference_type: "manual",
+    p_notes: d.notes ?? null,
+    p_item_condition: disposal ? "damaged" : "good",
+    p_reference_number: d.reference_number ?? null,
+  });
+  if (error) {
+    if (error.message.includes("insufficient_stock"))
+      return { ok: false, error: "insufficient_stock" };
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, message: "saved" };
+}
+
+const claimStatusSchema = z.object({
+  claim_id: z.string().uuid(),
+  status: z.enum(["sent", "in_repair", "resolved", "rejected", "closed"]),
+  resolution_notes: z.string().trim().max(500).optional(),
+});
+
+export async function updateWarrantyClaimStatus(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { sb, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  const parsed = claimStatusSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+  const closed = ["resolved", "rejected", "closed"].includes(d.status);
+
+  const { error } = await sb!
+    .from("shop_warranty_claims")
+    .update({
+      status: d.status,
+      resolution_notes: d.resolution_notes || null,
+      resolved_at: closed ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("claim_id", d.claim_id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "saved" };
+}
+
 // ------------------------------- Transfer ----------------------------------
 const transferSchema = z.object({
   variant_id: z.string().uuid(),

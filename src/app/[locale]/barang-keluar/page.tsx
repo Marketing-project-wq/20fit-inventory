@@ -1,11 +1,19 @@
 import { getTranslations } from "next-intl/server";
 import { Info } from "lucide-react";
-import { getSnapshot, getMovements } from "@/lib/data";
+import { getSnapshot, getMovements, getWarrantyClaims } from "@/lib/data";
 import { BarangKeluarTabs } from "@/components/forms/BarangKeluarTabs";
 
 export const dynamic = "force-dynamic";
 
-const OUT_TYPES = ["sale", "adjustment_out", "transfer_out", "return_out", "write_off"];
+const OUT_TYPES = [
+  "sale",
+  "adjustment_out",
+  "transfer_out",
+  "return_out",
+  "write_off",
+  "damage_out",
+  "warranty_out",
+];
 
 export default async function BarangKeluarPage() {
   const t = await getTranslations("nav");
@@ -15,6 +23,17 @@ export default async function BarangKeluarPage() {
     (await getMovements(250))
       ?.filter((m) => OUT_TYPES.includes(m.movement_type))
       .slice(0, 12) ?? [];
+  const claims = snap ? ((await getWarrantyClaims()) ?? []) : [];
+
+  // Per-location good/damaged stock, so the manual forms can show availability
+  // and cap quantities against the right pool.
+  const stockByLoc =
+    snap?.stockRows.map((r) => ({
+      variant_id: r.variant_id,
+      location_id: r.location_id,
+      good: r.on_hand,
+      damaged: r.damaged,
+    })) ?? [];
 
   return (
     <div className="space-y-6">
@@ -30,6 +49,8 @@ export default async function BarangKeluarPage() {
           skus={snap.skus}
           locations={snap.locations}
           recent={recent}
+          stockByLoc={stockByLoc}
+          claims={claims}
         />
       )}
     </div>
