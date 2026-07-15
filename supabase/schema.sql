@@ -870,3 +870,127 @@ DROP POLICY IF EXISTS item_photos_insert ON storage.objects;
 CREATE POLICY item_photos_insert ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'item-photos');
 DROP POLICY IF EXISTS item_photos_read ON storage.objects;
 CREATE POLICY item_photos_read ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'item-photos');
+
+-- ============================================================================
+-- MIGRATION (2026-07): Warranty / repair goods-out.
+-- Damaged stock (item_condition='damaged') can be shipped to a supplier or
+-- service center for a warranty claim or repair (movement_type='warranty_out').
+-- warranty_out draws from the DAMAGED pool and is tracked via shop_warranty_claims.
+-- Repaired/replacement units come back through the normal Goods In (return_in,
+-- condition good). Applied to the live DB; kept here idempotently.
+-- ============================================================================
+
+-- Nomor klaim garansi / tiket perbaikan pada baris ledger warranty_out.
+ALTER TABLE shop_stock_movements
+  ADD COLUMN IF NOT EXISTS warranty_claim_number TEXT;
+
+-- Warranty claim tracking (one claim per shipment; status over time).
+CREATE TABLE IF NOT EXISTS shop_warranty_claims (
+  claim_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  claim_number     TEXT NOT NULL UNIQUE,          -- WC-YYYY-XXXX
+  supplier_name    TEXT,                          -- supplier / service center tujuan
+  status           TEXT NOT NULL DEFAULT 'sent'
+                   CHECK (status IN ('sent','in_repair','resolved','rejected','closed')),
+  sent_at          TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at      TIMESTAMPTZ,
+  resolution_notes TEXT,
+  created_by       UUID,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_warranty_claims_number ON shop_warranty_claims(claim_number);
+CREATE INDEX IF NOT EXISTS idx_shop_warranty_claims_status ON shop_warranty_claims(status);
+
+ALTER TABLE shop_warranty_claims ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_warranty_claims_read ON shop_warranty_claims;
+CREATE POLICY shop_warranty_claims_read ON shop_warranty_claims FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS shop_warranty_claims_write ON shop_warranty_claims;
+CREATE POLICY shop_warranty_claims_write ON shop_warranty_claims FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT SELECT, INSERT, UPDATE, DELETE ON shop_warranty_claims TO authenticated;
+
+-- Auto-generate internal claim number WC-YYYY-XXXX.
+CREATE SEQUENCE IF NOT EXISTS shop_warranty_claim_seq START 1;
+CREATE OR REPLACE FUNCTION shop_generate_warranty_claim_number()
+RETURNS TEXT LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  RETURN 'WC-' || TO_CHAR(NOW(), 'YYYY') || '-' ||
+         LPAD(nextval('shop_warranty_claim_seq')::TEXT, 4, '0');
+END; $$;
+REVOKE ALL ON FUNCTION shop_generate_warranty_claim_number() FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_generate_warranty_claim_number() TO authenticated, service_role;
+
+-- Atomic warranty-out: ships DAMAGED stock, opens a claim, appends the movement
+-- and recomputes — in one transaction. Returns {claim_id, claim_number, movement_id}.
+CREATE OR REPLACE FUNCTION shop_record_warranty_out(
+  p_variant uuid, p_location uuid, p_qty int,
+  p_reason text DEFAULT NULL, p_notes text DEFAULT NULL,
+  p_supplier_name text DEFAULT NULL, p_claim_number text DEFAULT NULL,
+  p_photo_url text DEFAULT NULL, p_unit_cost numeric DEFAULT NULL
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_available int; v_claim_id uuid; v_claim_number text; v_movement uuid;
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+  SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+  FROM shop_stock_levels
+  WHERE variant_id = p_variant AND location_id = p_location AND condition = 'damaged' FOR UPDATE;
+  v_available := COALESCE(v_available, 0);
+  IF p_qty > v_available THEN
+    RAISE EXCEPTION 'insufficient_damaged_stock: available % < requested %', v_available, p_qty;
+  END IF;
+
+  v_claim_number := NULLIF(btrim(coalesce(p_claim_number, '')), '');
+  IF v_claim_number IS NULL THEN
+    v_claim_number := shop_generate_warranty_claim_number();
+  END IF;
+
+  INSERT INTO shop_warranty_claims(claim_number, supplier_name, status, sent_at)
+  VALUES (v_claim_number, NULLIF(btrim(coalesce(p_supplier_name, '')), ''), 'sent', NOW())
+  RETURNING claim_id INTO v_claim_id;
+
+  INSERT INTO shop_stock_movements(
+    variant_id, location_id, movement_type, quantity, unit_cost,
+    reference_type, reference_id, reason_code, notes,
+    item_condition, photo_url, warranty_claim_number)
+  VALUES (
+    p_variant, p_location, 'warranty_out', p_qty, p_unit_cost,
+    'warranty_claim', v_claim_id, p_reason, p_notes,
+    'damaged', p_photo_url, v_claim_number)
+  RETURNING movement_id INTO v_movement;
+
+  PERFORM shop_recompute_level(p_variant, p_location);
+  RETURN jsonb_build_object('claim_id', v_claim_id, 'claim_number', v_claim_number, 'movement_id', v_movement);
+END; $$;
+REVOKE ALL ON FUNCTION shop_record_warranty_out(uuid,uuid,int,text,text,text,text,text,numeric) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_record_warranty_out(uuid,uuid,int,text,text,text,text,text,numeric) TO authenticated, service_role;
+
+-- shop_record_movement now counts warranty_out as outbound too (the dedicated
+-- recorder above is the real path; this keeps the generic recorder's stock check
+-- correct if warranty_out is ever routed through it). Signature unchanged.
+CREATE OR REPLACE FUNCTION shop_record_movement(
+  p_variant uuid, p_location uuid, p_type text, p_qty int,
+  p_unit_cost numeric DEFAULT NULL, p_reference_type text DEFAULT 'manual',
+  p_sales_channel text DEFAULT NULL, p_marketplace_order text DEFAULT NULL,
+  p_reason text DEFAULT NULL, p_notes text DEFAULT NULL, p_allow_backorder boolean DEFAULT false,
+  p_item_condition text DEFAULT 'good', p_photo_url text DEFAULT NULL, p_reference_number text DEFAULT NULL
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_available int;
+  v_outbound boolean := p_type IN ('sale','transfer_out','return_out','adjustment_out','write_off','damage_out','warranty_out');
+  v_movement uuid;
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity: quantity must be positive'; END IF;
+  IF v_outbound AND NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available FROM shop_stock_levels
+    WHERE variant_id = p_variant AND location_id = p_location AND condition = p_item_condition FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty; END IF;
+  END IF;
+  INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, unit_cost,
+    reference_type, sales_channel, marketplace_order_number, reason_code, notes, item_condition, photo_url, reference_number)
+  VALUES (p_variant, p_location, p_type, p_qty, p_unit_cost, p_reference_type, p_sales_channel,
+    p_marketplace_order, p_reason, p_notes, p_item_condition, p_photo_url, p_reference_number)
+  RETURNING movement_id INTO v_movement;
+  PERFORM shop_recompute_level(p_variant, p_location);
+  RETURN v_movement;
+END; $$;
+REVOKE ALL ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean,text,text,text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean,text,text,text) TO authenticated, service_role;

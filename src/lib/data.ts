@@ -471,6 +471,73 @@ export async function getRecentTransfers(limit = 12): Promise<RecentTransfer[]> 
   }));
 }
 
+// ---------------------------- Warranty claims ------------------------------
+export type WarrantyClaim = {
+  claim_id: string;
+  claim_number: string;
+  supplier_name: string | null;
+  status: string;
+  sent_at: string;
+  resolved_at: string | null;
+  resolution_notes: string | null;
+  sku_code: string | null;
+  product_name: string | null;
+  quantity: number | null;
+};
+
+/** Warranty claims, newest first, joined to their warranty_out movement (SKU/qty). */
+export async function getWarrantyClaims(limit = 100): Promise<WarrantyClaim[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+
+  const [claims, movements, variants, products] = await Promise.all([
+    sb
+      .from("shop_warranty_claims")
+      .select(
+        "claim_id,claim_number,supplier_name,status,sent_at,resolved_at,resolution_notes",
+      )
+      .order("sent_at", { ascending: false })
+      .limit(limit),
+    sb
+      .from("shop_stock_movements")
+      .select("warranty_claim_number,variant_id,quantity")
+      .eq("movement_type", "warranty_out"),
+    sb.from("shop_product_variants").select("variant_id,product_id,sku_code"),
+    sb.from("shop_products").select("product_id,name"),
+  ]);
+  if (claims.error) return null;
+
+  const productById = new Map((products.data ?? []).map((p) => [p.product_id, p.name]));
+  const variantById = new Map((variants.data ?? []).map((v) => [v.variant_id, v]));
+  // First warranty_out movement per claim number (one shipment = one claim).
+  const mvByClaim = new Map<string, { variant_id: string; quantity: number }>();
+  for (const m of movements.data ?? []) {
+    if (m.warranty_claim_number && !mvByClaim.has(m.warranty_claim_number)) {
+      mvByClaim.set(m.warranty_claim_number, {
+        variant_id: m.variant_id,
+        quantity: m.quantity,
+      });
+    }
+  }
+
+  return (claims.data ?? []).map((c) => {
+    const mv = mvByClaim.get(c.claim_number);
+    const v = mv ? variantById.get(mv.variant_id) : undefined;
+    return {
+      claim_id: c.claim_id,
+      claim_number: c.claim_number,
+      supplier_name: c.supplier_name,
+      status: c.status,
+      sent_at: c.sent_at,
+      resolved_at: c.resolved_at,
+      resolution_notes: c.resolution_notes,
+      sku_code: v?.sku_code ?? null,
+      product_name: v ? (productById.get(v.product_id) ?? null) : null,
+      quantity: mv?.quantity ?? null,
+    };
+  });
+}
+
 // ------------------------------- Settings ----------------------------------
 export type SkuAdmin = {
   variant_id: string;

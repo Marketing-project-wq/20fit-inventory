@@ -37,6 +37,7 @@ const DAMAGE = new Set(["return_in_damaged", "damage_in", "damage_out"]);
 
 function movementTone(type: string): string {
   if (type === "write_off") return "bg-danger/15 text-danger";
+  if (type === "warranty_out") return "bg-info/15 text-info";
   if (DAMAGE.has(type)) return "bg-danger/15 text-danger";
   if (type === "sale") return "bg-accent-dim text-accent";
   if (INBOUND.has(type)) return "bg-success/15 text-success";
@@ -57,6 +58,7 @@ export const MOVEMENT_KEY: Record<string, string> = {
   return_in_damaged: "returnInDamaged",
   damage_in: "damageIn",
   damage_out: "damageOut",
+  warranty_out: "warrantyOut",
 };
 
 export function MovementBadge({

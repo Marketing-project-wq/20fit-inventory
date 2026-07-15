@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Camera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,11 +14,15 @@ import { MAX_ITEM_PHOTO_BYTES } from "@/lib/inventory/constants";
 export function ItemPhotoField({
   required = false,
   danger = false,
+  label,
 }: {
   required?: boolean;
   danger?: boolean;
+  label?: string;
 }) {
   const t = useTranslations("goodsIn");
+  const fieldLabel = label ?? t("damagePhotoLabel");
+  const inputId = useId();
   const [preview, setPreview] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -30,11 +34,11 @@ export function ItemPhotoField({
   return (
     <div>
       <span className="mb-1 block text-xs font-medium text-muted">
-        {t("damagePhotoLabel")}
+        {fieldLabel}
         {required && <span className="text-danger"> *</span>}
       </span>
       <label
-        htmlFor="item-photo"
+        htmlFor={inputId}
         className={cn(
           "flex min-h-[100px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-3 text-center transition-colors",
           danger ? "border-danger/50 bg-danger/5" : "border-border bg-surface-2",
@@ -45,7 +49,7 @@ export function ItemPhotoField({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={preview}
-              alt={t("damagePhotoLabel")}
+              alt={fieldLabel}
               className="max-h-56 w-full rounded object-cover"
             />
             <button
@@ -72,7 +76,7 @@ export function ItemPhotoField({
           </>
         )}
         <input
-          id="item-photo"
+          id={inputId}
           ref={inputRef}
           name="photo"
           type="file"
