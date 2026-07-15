@@ -112,6 +112,9 @@ export function StockTable({ rows }: { rows: StockRow[] }) {
                 onSort={setSort}
                 align="right"
               />
+              <th className="hidden px-4 py-3 text-right font-medium md:table-cell">
+                {ts("damagedStock")}
+              </th>
               <th className="px-4 py-3 font-medium">{tc("status")}</th>
             </tr>
           </thead>
@@ -133,6 +136,15 @@ export function StockTable({ rows }: { rows: StockRow[] }) {
                   {r.reserved}
                 </td>
                 <td className="px-4 py-3 text-right font-mono">{r.available}</td>
+                <td className="hidden px-4 py-3 text-right md:table-cell">
+                  {r.damaged > 0 ? (
+                    <span className="font-display inline-flex items-center rounded-full border border-danger bg-transparent px-2.5 py-0.5 font-mono text-[11px] font-bold text-danger">
+                      {r.damaged}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-dim">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <StockBadge status={r.status} label={ts(statusKey[r.status])} />
                 </td>

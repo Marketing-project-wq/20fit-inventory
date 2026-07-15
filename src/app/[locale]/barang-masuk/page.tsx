@@ -5,7 +5,14 @@ import { BarangMasukTabs } from "@/components/forms/BarangMasukTabs";
 
 export const dynamic = "force-dynamic";
 
-const IN_TYPES = ["purchase_receipt", "adjustment_in", "transfer_in", "return_in"];
+const IN_TYPES = [
+  "purchase_receipt",
+  "adjustment_in",
+  "transfer_in",
+  "return_in",
+  "return_in_damaged",
+  "damage_in",
+];
 
 export default async function BarangMasukPage() {
   const t = await getTranslations("nav");

@@ -64,6 +64,124 @@ export async function recordStockIn(
   return { ok: true, message: "saved" };
 }
 
+// ------------------------- Return in / Damaged in --------------------------
+// Uploads an optional condition photo to the private item-photos bucket.
+async function uploadItemPhoto(
+  sb: NonNullable<Awaited<ReturnType<typeof createSupabaseServerClient>>>,
+  file: File,
+  folder: string,
+): Promise<{ path?: string; error?: string }> {
+  if (file.size > 10_000_000) return { error: "photo_too_large" };
+  const ext =
+    (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const path = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await sb.storage
+    .from("item-photos")
+    .upload(path, file, { contentType: file.type || undefined, upsert: false });
+  if (error) return { error: "photo_upload_failed" };
+  return { path };
+}
+
+const returnInSchema = z.object({
+  variant_id: z.string().uuid(),
+  location_id: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+  reason_code: z.string().trim().min(1).max(60),
+  reason_other: z.string().trim().max(200).optional(),
+  item_condition: z.enum(["good", "damaged"]),
+  notes: z.string().trim().max(500).optional(),
+  reference_number: z.string().trim().max(120).optional(),
+});
+
+export async function recordReturnIn(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { sb, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  const parsed = returnInSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+  const damaged = d.item_condition === "damaged";
+  const reason = d.reason_code === "other" ? d.reason_other?.trim() || "other" : d.reason_code;
+
+  let photoPath: string | null = null;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    const up = await uploadItemPhoto(sb!, photo, "returns");
+    if (up.error) return { ok: false, error: up.error };
+    photoPath = up.path!;
+  }
+  // Damaged returns must document the condition.
+  if (damaged && !photoPath) return { ok: false, error: "photo_required" };
+  if (damaged && !d.notes?.trim()) return { ok: false, error: "notes_required" };
+
+  const { error } = await sb!.rpc("shop_record_movement", {
+    p_variant: d.variant_id,
+    p_location: d.location_id,
+    p_type: damaged ? "return_in_damaged" : "return_in",
+    p_qty: d.quantity,
+    p_reference_type: "manual",
+    p_reason: reason,
+    p_notes: d.notes ?? null,
+    p_item_condition: d.item_condition,
+    p_photo_url: photoPath,
+    p_reference_number: d.reference_number ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "saved" };
+}
+
+const damageInSchema = z.object({
+  variant_id: z.string().uuid(),
+  location_id: z.string().uuid(),
+  quantity: z.coerce.number().int().positive(),
+  reason_code: z.string().trim().min(1).max(60),
+  reason_other: z.string().trim().max(200).optional(),
+  notes: z.string().trim().min(1).max(500),
+  unit_cost: optionalNumber,
+  reference_number: z.string().trim().max(120).optional(),
+});
+
+export async function recordDamageIn(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { sb, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  const parsed = damageInSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+  const reason = d.reason_code === "other" ? d.reason_other?.trim() || "other" : d.reason_code;
+
+  let photoPath: string | null = null;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    const up = await uploadItemPhoto(sb!, photo, "damage");
+    if (up.error) return { ok: false, error: up.error };
+    photoPath = up.path!;
+  }
+  if (!photoPath) return { ok: false, error: "photo_required" };
+
+  const { error } = await sb!.rpc("shop_record_movement", {
+    p_variant: d.variant_id,
+    p_location: d.location_id,
+    p_type: "damage_in",
+    p_qty: d.quantity,
+    p_unit_cost: d.unit_cost ?? null,
+    p_reference_type: "manual",
+    p_reason: reason,
+    p_notes: d.notes,
+    p_item_condition: "damaged",
+    p_photo_url: photoPath,
+    p_reference_number: d.reference_number ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "saved" };
+}
+
 // ------------------------------- Goods out ---------------------------------
 const stockOutSchema = z.object({
   variant_id: z.string().uuid(),

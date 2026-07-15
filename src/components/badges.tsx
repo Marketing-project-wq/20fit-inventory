@@ -33,8 +33,11 @@ const INBOUND = new Set([
   "adjustment_in",
 ]);
 
+const DAMAGE = new Set(["return_in_damaged", "damage_in", "damage_out"]);
+
 function movementTone(type: string): string {
   if (type === "write_off") return "bg-danger/15 text-danger";
+  if (DAMAGE.has(type)) return "bg-danger/15 text-danger";
   if (type === "sale") return "bg-accent-dim text-accent";
   if (INBOUND.has(type)) return "bg-success/15 text-success";
   return "bg-surface-2 text-muted";
@@ -51,6 +54,9 @@ export const MOVEMENT_KEY: Record<string, string> = {
   adjustment_in: "adjustmentIn",
   adjustment_out: "adjustmentOut",
   write_off: "writeOff",
+  return_in_damaged: "returnInDamaged",
+  damage_in: "damageIn",
+  damage_out: "damageOut",
 };
 
 export function MovementBadge({
