@@ -994,3 +994,305 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean,text,text,text) FROM public, anon;
 GRANT EXECUTE ON FUNCTION shop_record_movement(uuid,uuid,text,int,numeric,text,text,text,text,text,boolean,text,text,text) TO authenticated, service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-07): Activity log — who changed what, and when.
+-- Database triggers populate shop_audit_logs automatically for every important
+-- table. The actor is read from the request JWT, so no frontend change is
+-- needed beyond the read-only Activity Log page. Applied to the live DB; kept
+-- here idempotently.
+-- ============================================================================
+
+ALTER TABLE shop_audit_logs
+  ADD COLUMN IF NOT EXISTS user_email  TEXT,
+  ADD COLUMN IF NOT EXISTS user_name   TEXT,
+  ADD COLUMN IF NOT EXISTS module      TEXT,   -- 'barang_masuk' | 'barang_keluar' | 'pengaturan' | ...
+  ADD COLUMN IF NOT EXISTS description TEXT,   -- human-readable, e.g. "Update harga KB-016"
+  ADD COLUMN IF NOT EXISTS session_id  TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_shop_audit_logs_user    ON shop_audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_shop_audit_logs_entity  ON shop_audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_shop_audit_logs_action  ON shop_audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_shop_audit_logs_created ON shop_audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shop_audit_logs_module  ON shop_audit_logs(module);
+
+-- Read-only for authenticated users; inserts happen only via the SECURITY DEFINER
+-- logger below, so logs cannot be forged from the client.
+ALTER TABLE shop_audit_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_audit_logs_read ON shop_audit_logs;
+CREATE POLICY shop_audit_logs_read ON shop_audit_logs FOR SELECT TO authenticated USING (true);
+GRANT SELECT ON shop_audit_logs TO authenticated;
+
+-- Central logger — actor comes from the request JWT (auth.uid()/auth.jwt()); an
+-- audit failure never breaks the underlying operation.
+CREATE OR REPLACE FUNCTION shop_log_audit_event(
+  p_action text, p_entity_type text, p_entity_id uuid,
+  p_before jsonb, p_after jsonb,
+  p_module text DEFAULT NULL, p_description text DEFAULT NULL
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_uid uuid; v_email text; v_name text; v_session text;
+BEGIN
+  BEGIN
+    v_uid := auth.uid();
+    v_email := auth.jwt() ->> 'email';
+    v_name := COALESCE(auth.jwt() -> 'user_metadata' ->> 'full_name', v_email);
+    v_session := auth.jwt() ->> 'session_id';
+  EXCEPTION WHEN OTHERS THEN
+    v_uid := NULL; v_email := NULL; v_name := NULL; v_session := NULL;
+  END;
+  INSERT INTO shop_audit_logs(
+    user_id, user_email, user_name, action, entity_type, entity_id,
+    before_value, after_value, module, description, session_id, created_at)
+  VALUES (
+    v_uid, v_email, COALESCE(v_name, 'System'), p_action, p_entity_type, p_entity_id,
+    p_before, p_after, p_module, p_description, v_session, NOW());
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'audit log failed for % % %: %', p_action, p_entity_type, p_entity_id, SQLERRM;
+END; $$;
+REVOKE ALL ON FUNCTION shop_log_audit_event(text,text,uuid,jsonb,jsonb,text,text) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_log_audit_event(text,text,uuid,jsonb,jsonb,text,text) TO authenticated, service_role;
+
+-- Per-table audit triggers (all SECURITY DEFINER).
+CREATE OR REPLACE FUNCTION shop_audit_product_variants()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_desc := 'SKU baru dibuat: ' || NEW.sku_code;
+    PERFORM shop_log_audit_event('sku_created','shop_product_variants',NEW.variant_id,NULL,to_jsonb(NEW),'pengaturan',v_desc);
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.cost_price IS DISTINCT FROM NEW.cost_price OR OLD.selling_price IS DISTINCT FROM NEW.selling_price THEN
+      v_desc := 'Update harga ' || NEW.sku_code
+        || ': modal ' || COALESCE(OLD.cost_price::TEXT,'-') || ' → ' || COALESCE(NEW.cost_price::TEXT,'-')
+        || ', jual ' || COALESCE(OLD.selling_price::TEXT,'-') || ' → ' || COALESCE(NEW.selling_price::TEXT,'-');
+    ELSIF OLD.is_active IS DISTINCT FROM NEW.is_active THEN
+      v_desc := 'SKU ' || NEW.sku_code || (CASE WHEN NEW.is_active THEN ' diaktifkan' ELSE ' dinonaktifkan' END);
+    ELSE
+      v_desc := 'Update data SKU: ' || NEW.sku_code;
+    END IF;
+    PERFORM shop_log_audit_event('sku_updated','shop_product_variants',NEW.variant_id,to_jsonb(OLD),to_jsonb(NEW),'pengaturan',v_desc);
+  ELSIF TG_OP = 'DELETE' THEN
+    v_desc := 'SKU dihapus: ' || OLD.sku_code;
+    PERFORM shop_log_audit_event('sku_deleted','shop_product_variants',OLD.variant_id,to_jsonb(OLD),NULL,'pengaturan',v_desc);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_product_variants ON shop_product_variants;
+CREATE TRIGGER trg_shop_audit_product_variants
+  AFTER INSERT OR UPDATE OR DELETE ON shop_product_variants
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_product_variants();
+
+CREATE OR REPLACE FUNCTION shop_audit_products()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_desc := 'Produk baru: ' || NEW.name;
+    PERFORM shop_log_audit_event('product_created','shop_products',NEW.product_id,NULL,to_jsonb(NEW),'pengaturan',v_desc);
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_desc := 'Update produk: ' || NEW.name;
+    PERFORM shop_log_audit_event('product_updated','shop_products',NEW.product_id,to_jsonb(OLD),to_jsonb(NEW),'pengaturan',v_desc);
+  ELSIF TG_OP = 'DELETE' THEN
+    v_desc := 'Produk dihapus: ' || OLD.name;
+    PERFORM shop_log_audit_event('product_deleted','shop_products',OLD.product_id,to_jsonb(OLD),NULL,'pengaturan',v_desc);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_products ON shop_products;
+CREATE TRIGGER trg_shop_audit_products
+  AFTER INSERT OR UPDATE OR DELETE ON shop_products
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_products();
+
+-- stock_movements is append-only → INSERT only.
+CREATE OR REPLACE FUNCTION shop_audit_stock_movements()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_sku TEXT; v_desc TEXT; v_module TEXT;
+BEGIN
+  SELECT sku_code INTO v_sku FROM shop_product_variants WHERE variant_id = NEW.variant_id;
+  v_module := CASE
+    WHEN NEW.movement_type IN ('purchase_receipt','damage_in','return_in','return_in_damaged') THEN 'barang_masuk'
+    WHEN NEW.movement_type IN ('sale','damage_out','warranty_out','return_out') THEN 'barang_keluar'
+    WHEN NEW.movement_type IN ('transfer_in','transfer_out') THEN 'transfer'
+    WHEN NEW.movement_type IN ('adjustment_in','adjustment_out') THEN 'stock_opname'
+    ELSE 'mutasi_stok'
+  END;
+  v_desc := CASE NEW.movement_type
+    WHEN 'purchase_receipt'  THEN 'Terima barang: '
+    WHEN 'sale'              THEN 'Penjualan: '
+    WHEN 'return_in'         THEN 'Retur masuk (baik): '
+    WHEN 'return_in_damaged' THEN 'Retur masuk (rusak): '
+    WHEN 'damage_in'         THEN 'Catat barang rusak masuk: '
+    WHEN 'damage_out'        THEN 'Disposal barang rusak: '
+    WHEN 'warranty_out'      THEN 'Kirim garansi: '
+    WHEN 'transfer_in'       THEN 'Transfer masuk: '
+    WHEN 'transfer_out'      THEN 'Transfer keluar: '
+    WHEN 'adjustment_in'     THEN 'Penyesuaian stok (+): '
+    WHEN 'adjustment_out'    THEN 'Penyesuaian stok (-): '
+    WHEN 'write_off'         THEN 'Write-off stok: '
+    ELSE NEW.movement_type || ': '
+  END || NEW.quantity || ' × ' || COALESCE(v_sku, '?');
+  IF NEW.reference_number IS NOT NULL THEN
+    v_desc := v_desc || ' [' || NEW.reference_number || ']';
+  END IF;
+  PERFORM shop_log_audit_event('stock_' || NEW.movement_type,'shop_stock_movements',NEW.movement_id,NULL,to_jsonb(NEW),v_module,v_desc);
+  RETURN NEW;
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_stock_movements ON shop_stock_movements;
+CREATE TRIGGER trg_shop_audit_stock_movements
+  AFTER INSERT ON shop_stock_movements
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_stock_movements();
+
+CREATE OR REPLACE FUNCTION shop_audit_purchase_orders()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_desc := 'PO dibuat: ' || NEW.po_number;
+    PERFORM shop_log_audit_event('po_created','shop_purchase_orders',NEW.po_id,NULL,to_jsonb(NEW),'barang_masuk',v_desc);
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.status IS DISTINCT FROM NEW.status THEN
+      v_desc := 'Status PO ' || NEW.po_number || ': ' || OLD.status || ' → ' || NEW.status;
+    ELSE
+      v_desc := 'Update PO: ' || NEW.po_number;
+    END IF;
+    PERFORM shop_log_audit_event('po_updated','shop_purchase_orders',NEW.po_id,to_jsonb(OLD),to_jsonb(NEW),'barang_masuk',v_desc);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_purchase_orders ON shop_purchase_orders;
+CREATE TRIGGER trg_shop_audit_purchase_orders
+  AFTER INSERT OR UPDATE ON shop_purchase_orders
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_purchase_orders();
+
+CREATE OR REPLACE FUNCTION shop_audit_stock_opname()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_desc := 'Sesi stock opname dibuat';
+    PERFORM shop_log_audit_event('opname_created','shop_stock_opname_sessions',NEW.session_id,NULL,to_jsonb(NEW),'stock_opname',v_desc);
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.status IS DISTINCT FROM NEW.status THEN
+      v_desc := 'Status opname: ' || OLD.status || ' → ' || NEW.status;
+      IF NEW.status = 'completed' THEN v_desc := v_desc || ' (disetujui)'; END IF;
+    ELSE
+      v_desc := 'Update sesi opname';
+    END IF;
+    PERFORM shop_log_audit_event('opname_updated','shop_stock_opname_sessions',NEW.session_id,to_jsonb(OLD),to_jsonb(NEW),'stock_opname',v_desc);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_stock_opname_sessions ON shop_stock_opname_sessions;
+CREATE TRIGGER trg_shop_audit_stock_opname_sessions
+  AFTER INSERT OR UPDATE ON shop_stock_opname_sessions
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_stock_opname();
+
+CREATE OR REPLACE FUNCTION shop_audit_warranty_claims()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_desc := 'Klaim garansi dibuat: ' || NEW.claim_number || ' → ' || COALESCE(NEW.supplier_name,'?');
+    PERFORM shop_log_audit_event('warranty_created','shop_warranty_claims',NEW.claim_id,NULL,to_jsonb(NEW),'barang_keluar',v_desc);
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.status IS DISTINCT FROM NEW.status THEN
+      v_desc := 'Status klaim ' || NEW.claim_number || ': ' || OLD.status || ' → ' || NEW.status;
+    ELSE
+      v_desc := 'Update klaim garansi: ' || NEW.claim_number;
+    END IF;
+    PERFORM shop_log_audit_event('warranty_updated','shop_warranty_claims',NEW.claim_id,to_jsonb(OLD),to_jsonb(NEW),'barang_keluar',v_desc);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_warranty_claims ON shop_warranty_claims;
+CREATE TRIGGER trg_shop_audit_warranty_claims
+  AFTER INSERT OR UPDATE ON shop_warranty_claims
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_warranty_claims();
+
+CREATE OR REPLACE FUNCTION shop_audit_sales_staff()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_desc := 'Tambah sales staff: ' || NEW.name;
+    PERFORM shop_log_audit_event('staff_created','shop_sales_staff',NEW.staff_id,NULL,to_jsonb(NEW),'pengaturan',v_desc);
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.name IS DISTINCT FROM NEW.name THEN
+      v_desc := 'Nama sales diubah: ' || OLD.name || ' → ' || NEW.name;
+    ELSIF OLD.is_active IS DISTINCT FROM NEW.is_active THEN
+      v_desc := 'Sales staff ' || NEW.name || (CASE WHEN NEW.is_active THEN ' diaktifkan' ELSE ' dinonaktifkan' END);
+    ELSE
+      v_desc := 'Update sales staff: ' || NEW.name;
+    END IF;
+    PERFORM shop_log_audit_event('staff_updated','shop_sales_staff',NEW.staff_id,to_jsonb(OLD),to_jsonb(NEW),'pengaturan',v_desc);
+  ELSIF TG_OP = 'DELETE' THEN
+    v_desc := 'Sales staff dihapus: ' || OLD.name;
+    PERFORM shop_log_audit_event('staff_deleted','shop_sales_staff',OLD.staff_id,to_jsonb(OLD),NULL,'pengaturan',v_desc);
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_sales_staff ON shop_sales_staff;
+CREATE TRIGGER trg_shop_audit_sales_staff
+  AFTER INSERT OR UPDATE OR DELETE ON shop_sales_staff
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_sales_staff();
+
+-- Master data (locations / brands / categories).
+CREATE OR REPLACE FUNCTION shop_audit_locations()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  v_desc := CASE TG_OP
+    WHEN 'INSERT' THEN 'Lokasi baru: ' || NEW.name
+    WHEN 'UPDATE' THEN 'Update lokasi: ' || NEW.name
+    WHEN 'DELETE' THEN 'Lokasi dihapus: ' || OLD.name END;
+  PERFORM shop_log_audit_event('location_' || LOWER(TG_OP),'shop_locations',
+    COALESCE(NEW.location_id, OLD.location_id),
+    CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+    CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END,
+    'pengaturan', v_desc);
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_locations ON shop_locations;
+CREATE TRIGGER trg_shop_audit_locations
+  AFTER INSERT OR UPDATE OR DELETE ON shop_locations
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_locations();
+
+CREATE OR REPLACE FUNCTION shop_audit_brands()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  v_desc := CASE TG_OP
+    WHEN 'INSERT' THEN 'Brand baru: ' || NEW.name
+    WHEN 'UPDATE' THEN 'Update brand: ' || NEW.name
+    WHEN 'DELETE' THEN 'Brand dihapus: ' || OLD.name END;
+  PERFORM shop_log_audit_event('brand_' || LOWER(TG_OP),'shop_brands',
+    COALESCE(NEW.brand_id, OLD.brand_id),
+    CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+    CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END,
+    'pengaturan', v_desc);
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_brands ON shop_brands;
+CREATE TRIGGER trg_shop_audit_brands
+  AFTER INSERT OR UPDATE OR DELETE ON shop_brands
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_brands();
+
+CREATE OR REPLACE FUNCTION shop_audit_categories()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_desc TEXT;
+BEGIN
+  v_desc := CASE TG_OP
+    WHEN 'INSERT' THEN 'Kategori baru: ' || NEW.name
+    WHEN 'UPDATE' THEN 'Update kategori: ' || NEW.name
+    WHEN 'DELETE' THEN 'Kategori dihapus: ' || OLD.name END;
+  PERFORM shop_log_audit_event('category_' || LOWER(TG_OP),'shop_categories',
+    COALESCE(NEW.category_id, OLD.category_id),
+    CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+    CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END,
+    'pengaturan', v_desc);
+  RETURN COALESCE(NEW, OLD);
+END; $$;
+DROP TRIGGER IF EXISTS trg_shop_audit_categories ON shop_categories;
+CREATE TRIGGER trg_shop_audit_categories
+  AFTER INSERT OR UPDATE OR DELETE ON shop_categories
+  FOR EACH ROW EXECUTE FUNCTION shop_audit_categories();

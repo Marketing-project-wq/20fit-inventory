@@ -617,3 +617,53 @@ export async function updatePassword(
   await sb.auth.signOut();
   return { ok: true, message: "password_updated" };
 }
+
+// ----------------------------- Activity log --------------------------------
+type AuditExportFilters = {
+  search?: string;
+  module?: string;
+  user?: string;
+  from?: string;
+  to?: string;
+};
+
+function csvCell(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+/** Build a CSV of audit rows matching the current filters (capped at 5000). */
+export async function exportAuditLogsCsv(
+  filters: AuditExportFilters,
+): Promise<{ ok: boolean; csv?: string; error?: string }> {
+  const { sb, error: authErr } = await getAuthedClient();
+  if (authErr) return { ok: false, error: authErr };
+  let q = sb!
+    .from("shop_audit_logs")
+    .select("created_at,user_email,user_name,module,action,description")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+  if (filters.module) q = q.eq("module", filters.module);
+  if (filters.user) q = q.ilike("user_email", `%${filters.user}%`);
+  if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00`);
+  if (filters.to) q = q.lte("created_at", `${filters.to}T23:59:59`);
+  if (filters.search) q = q.ilike("description", `%${filters.search}%`);
+  const { data, error } = await q;
+  if (error) return { ok: false, error: error.message };
+
+  const header = ["Waktu", "Email User", "Nama User", "Modul", "Aksi", "Deskripsi"];
+  const rows = (data ?? []).map((r) =>
+    [
+      r.created_at,
+      r.user_email ?? "",
+      r.user_name ?? "",
+      r.module ?? "",
+      r.action,
+      r.description ?? "",
+    ]
+      .map(csvCell)
+      .join(","),
+  );
+  const csv = [header.map(csvCell).join(","), ...rows].join("\n");
+  return { ok: true, csv };
+}

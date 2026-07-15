@@ -15,6 +15,7 @@
     "stockOpname": "Stock Opname",
     "warehouseAccess": "Warehouse Access",
     "reports": "Reports",
+    "activityLog": "Activity Log",
     "settings": "Settings"
   },
   "dashboard": {
@@ -141,6 +142,41 @@
     "status_rejected": "Rejected",
     "status_closed": "Closed",
     "noClaims": "No warranty claims yet."
+  },
+  "activityLog": {
+    "title": "Activity Log",
+    "subtitle": "Audit trail of every data change in the system",
+    "entryCount": "{count} entries",
+    "exportCsv": "Export CSV",
+    "searchPlaceholder": "Search activity description...",
+    "filterModule": "All Modules",
+    "filterUser": "Filter user email...",
+    "filterFrom": "From date",
+    "filterTo": "To date",
+    "resetFilter": "Reset Filters",
+    "noActivity": "No activity found",
+    "showingOf": "Showing {from}–{to} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "colTime": "Time",
+    "colUser": "User",
+    "colModule": "Module",
+    "colActivity": "Activity",
+    "colDetail": "Detail",
+    "system": "System",
+    "viewChanges": "{count} Changes",
+    "diffTitle": "Change Details",
+    "before": "Before",
+    "after": "After",
+    "modules": {
+      "barang_masuk": "Goods In",
+      "barang_keluar": "Goods Out",
+      "transfer": "Transfer",
+      "stock_opname": "Stock Opname",
+      "pengaturan": "Settings",
+      "mutasi_stok": "Stock Movements",
+      "laporan": "Reports"
+    }
   },
   "stock": {
     "inStock": "In Stock",
