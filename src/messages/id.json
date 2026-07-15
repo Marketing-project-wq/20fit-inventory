@@ -45,6 +45,9 @@
     "costPrice": "Harga Modal",
     "sellingPrice": "Harga Jual",
     "stockOnHand": "Stok di Tangan",
+    "addSku": "Tambah SKU",
+    "addSkuNew": "Tambah SKU Baru",
+    "quickAdd": "Tambah",
     "reorderPoint": "Titik Pemesanan Ulang",
     "qrCode": "QR Code / Barcode",
     "downloadQR": "Unduh QR Code",
@@ -228,7 +231,8 @@
     "all": "Semua",
     "sortBy": "Urutkan",
     "resetFilters": "Reset filter",
-    "showing": "Menampilkan {count} dari {total} data"
+    "showing": "Menampilkan {count} dari {total} data",
+    "row": "Baris"
   },
   "form": {
     "sku": "SKU",
@@ -418,6 +422,27 @@
     "salesStaffDeleteConfirm": "Hapus \"{name}\" dari daftar Sales Staff?",
     "salesStaffExists": "Nama tersebut sudah ada dalam daftar.",
     "salesStaffInUse": "Tidak bisa dihapus — nama sudah dipakai di data transfer atau akses gudang. Nonaktifkan saja.",
-    "noSalesStaff": "Belum ada sales staff. Tambahkan nama di atas."
+    "noSalesStaff": "Belum ada sales staff. Tambahkan nama di atas.",
+    "bulkImport": "Import SKU Massal",
+    "bulkImportDesc": "Upload file Excel atau CSV berisi daftar SKU baru. Review sebelum konfirmasi.",
+    "downloadTemplateXlsx": "Template Excel",
+    "downloadTemplateCsv": "Template CSV",
+    "dropFileHere": "Seret file ke sini atau klik untuk pilih",
+    "supportedFormats": "Excel (.xlsx) atau CSV (.csv) · pakai template di atas",
+    "parsing": "Membaca file...",
+    "importing": "Menyimpan ke database...",
+    "previewTotal": "Total Baris",
+    "validRows": "Baris Valid",
+    "errorRows": "Baris Error",
+    "statusCreate": "BARU",
+    "statusUpdate": "UPDATE",
+    "statusError": "ERROR",
+    "andMoreRows": "... dan {n} baris lainnya",
+    "importNValidSku": "Import {n} SKU Valid",
+    "importDone": "Import selesai",
+    "importSummary": "{created} SKU baru · {updated} diperbarui · {failed} gagal",
+    "importAnotherFile": "Import File Lain",
+    "importTooLarge": "Ukuran file maksimal 5MB.",
+    "importParseFailed": "Gagal membaca file. Pastikan format Excel/CSV sesuai template."
   }
 }
