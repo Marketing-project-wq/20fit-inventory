@@ -94,7 +94,21 @@
     "inside": "Inside",
     "duration": "Duration",
     "hoursShort": "h",
-    "minutesShort": "m"
+    "minutesShort": "m",
+    "salesOrVisitor": "Sales / Visitor Name",
+    "selectSales": "— Select sales name —",
+    "dailyWorker": "Other — Daily Worker",
+    "dwNamePlaceholder": "Enter daily worker name...",
+    "dwNote": "Daily workers don't have system accounts. Name recorded manually."
+  },
+  "transfer": {
+    "salesPerson": "Sales / Person in Charge",
+    "proofPhoto": "Proof Photo",
+    "proofPhotoOptional": "Proof Photo (Optional)",
+    "takeOrChoosePhoto": "Take / Choose Photo",
+    "photoMaxSize": "JPG, PNG, HEIC · max 5MB",
+    "photoTooLarge": "Photo must be 5MB or smaller.",
+    "photoUploadFailed": "Photo upload failed. Please try again."
   },
   "import": {
     "uploadPackingList": "Upload Packing List",
@@ -388,6 +402,19 @@
     "emailExists": "Email already registered.",
     "invalidStaff": "Invalid staff data (check the email).",
     "noStaff": "No staff yet.",
-    "staffReadOnly": "You have view-only access. Managing staff requires the Admin role."
+    "staffReadOnly": "You have view-only access. Managing staff requires the Admin role.",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "salesStaff": "Sales Staff",
+    "salesStaffDesc": "Names for the sales dropdown in Transfer and Warehouse Access. Deactivate to hide from the dropdown without deleting.",
+    "addSalesStaff": "Add",
+    "salesStaffPlaceholder": "New sales name...",
+    "salesStaffActive": "Active",
+    "salesStaffInactive": "Inactive",
+    "salesStaffDeleteConfirm": "Remove \"{name}\" from the Sales Staff list?",
+    "salesStaffExists": "That name is already in the list.",
+    "salesStaffInUse": "Can't delete — this name is already used in transfer or access records. Deactivate it instead.",
+    "noSalesStaff": "No sales staff yet. Add a name above."
   }
 }

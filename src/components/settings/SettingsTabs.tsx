@@ -2,12 +2,19 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import { useTranslations } from "next-intl";
-import { Package, MapPin, UserCog, Users } from "lucide-react";
+import { Package, MapPin, UserCog, Users, Contact } from "lucide-react";
 import { SkuManager } from "./SkuManager";
 import { LocationManager } from "./LocationManager";
 import { StaffManager } from "./StaffManager";
+import { SalesStaffManager } from "./SalesStaffManager";
 import { AccountPanel } from "./AccountPanel";
-import type { SkuAdmin, LocationAdmin, StaffMember, StaffRole } from "@/lib/data";
+import type {
+  SkuAdmin,
+  LocationAdmin,
+  StaffMember,
+  StaffRole,
+  SalesStaff,
+} from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 type Opt = { id: string; name: string };
@@ -24,6 +31,7 @@ export function SettingsTabs({
   categories,
   brands,
   staff,
+  salesStaff,
   canManageStaff,
   email,
   role,
@@ -33,6 +41,7 @@ export function SettingsTabs({
   categories: Opt[];
   brands: Opt[];
   staff: StaffMember[];
+  salesStaff: SalesStaff[];
   canManageStaff: boolean;
   email: string;
   role: StaffRole | null;
@@ -54,6 +63,10 @@ export function SettingsTabs({
           <Users size={15} />
           {t("tabStaff")}
         </Tabs.Trigger>
+        <Tabs.Trigger value="salesStaff" className={triggerCls}>
+          <Contact size={15} />
+          {t("salesStaff")}
+        </Tabs.Trigger>
         <Tabs.Trigger value="account" className={triggerCls}>
           <UserCog size={15} />
           {t("tabAccount")}
@@ -68,6 +81,9 @@ export function SettingsTabs({
       </Tabs.Content>
       <Tabs.Content value="staff" className="focus:outline-none">
         <StaffManager staff={staff} canManage={canManageStaff} />
+      </Tabs.Content>
+      <Tabs.Content value="salesStaff" className="focus:outline-none">
+        <SalesStaffManager staff={salesStaff} />
       </Tabs.Content>
       <Tabs.Content value="account" className="focus:outline-none">
         <AccountPanel email={email} role={role} />

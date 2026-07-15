@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { format } from "date-fns";
 import { Info, DoorOpen, LogOut, Clock } from "lucide-react";
-import { getAccessLogs, getLocations } from "@/lib/data";
+import { getAccessLogs, getLocations, getSalesStaff } from "@/lib/data";
 import { checkOutAccess } from "@/lib/actions";
 import { CheckInForm } from "@/components/access/CheckInForm";
+import type { AccessLog } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,13 @@ function fmtDuration(ms: number, h: string, m: string): string {
   return hours === 0 ? `${mins}${m}` : `${hours}${h} ${mins}${m}`;
 }
 
+/** Visitor display: sales staff name, or "DW: name", or legacy visitor_name. */
+function visitorLabel(l: AccessLog): string {
+  if (l.sales_staff_name) return l.sales_staff_name;
+  if (l.dw_name) return `DW: ${l.dw_name}`;
+  return l.visitor_name ?? "—";
+}
+
 export default async function AksesGudangPage({
   params,
 }: {
@@ -24,8 +32,12 @@ export default async function AksesGudangPage({
   const t = await getTranslations("access");
   const td = await getTranslations("dashboard");
 
-  const logs = await getAccessLogs(100);
-  const locations = (await getLocations()) ?? [];
+  const [logs, locationsRaw, salesStaff] = await Promise.all([
+    getAccessLogs(100),
+    getLocations(),
+    getSalesStaff(),
+  ]);
+  const locations = locationsRaw ?? [];
   const now = Date.now();
   const hShort = t("hoursShort");
   const mShort = t("minutesShort");
@@ -49,7 +61,7 @@ export default async function AksesGudangPage({
           {/* Check-in */}
           <div>
             <h2 className="mb-3 text-sm font-semibold text-muted">{t("newVisit")}</h2>
-            <CheckInForm locations={locations} />
+            <CheckInForm locations={locations} salesStaff={salesStaff} />
           </div>
 
           {/* Currently inside + history */}
@@ -75,7 +87,7 @@ export default async function AksesGudangPage({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="truncate font-medium text-fg">
-                            {l.visitor_name ?? "—"}
+                            {visitorLabel(l)}
                           </div>
                           {l.purpose && (
                             <div className="truncate text-xs text-muted">
@@ -139,7 +151,7 @@ export default async function AksesGudangPage({
                       {history.map((l) => (
                         <tr key={l.log_id} className="border-t border-border">
                           <td className="px-3 py-2 text-fg">
-                            {l.visitor_name ?? "—"}
+                            {visitorLabel(l)}
                             <span className="ml-2 text-xs text-dim">
                               {l.location_name}
                             </span>

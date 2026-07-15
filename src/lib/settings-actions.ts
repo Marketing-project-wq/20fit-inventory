@@ -225,3 +225,80 @@ export async function changePassword(
   if (e) return { ok: false, error: "update_failed" };
   return { ok: true, message: "password_changed" };
 }
+
+// ----------------------------- Sales staff ----------------------------------
+// Names for the Transfer / Warehouse Access dropdowns. Separate from shop_staff
+// (which are login accounts) — these are just picklist entries.
+const nameOnly = (msg: string) =>
+  /duplicate|unique/i.test(msg) ? "name_exists" : msg;
+
+export async function createSalesStaff(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  const p = z.object({ name: z.string().trim().min(1).max(120) }).safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+
+  const { data: last } = await sb!
+    .from("shop_sales_staff")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sort_order = (last?.sort_order ?? 0) + 1;
+
+  const { data, error: e } = await sb!
+    .from("shop_sales_staff")
+    .insert({ name: p.data.name, sort_order })
+    .select("staff_id")
+    .single();
+  if (e) return { ok: false, error: nameOnly(e.message) };
+  revalidatePath("/", "layout");
+  return { ok: true, id: data?.staff_id };
+}
+
+export async function renameSalesStaff(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  const p = z
+    .object({ staff_id: z.string().uuid(), name: z.string().trim().min(1).max(120) })
+    .safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+  const { error: e } = await sb!
+    .from("shop_sales_staff")
+    .update({ name: p.data.name, updated_at: new Date().toISOString() })
+    .eq("staff_id", p.data.staff_id);
+  if (e) return { ok: false, error: nameOnly(e.message) };
+  revalidatePath("/", "layout");
+  return { ok: true, id: p.data.staff_id };
+}
+
+export async function toggleSalesStaff(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  const p = z
+    .object({ staff_id: z.string().uuid(), is_active: z.boolean() })
+    .safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+  const { error: e } = await sb!
+    .from("shop_sales_staff")
+    .update({ is_active: p.data.is_active, updated_at: new Date().toISOString() })
+    .eq("staff_id", p.data.staff_id);
+  if (e) return { ok: false, error: e.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function deleteSalesStaff(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  const p = z.object({ staff_id: z.string().uuid() }).safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+  const { error: e } = await sb!
+    .from("shop_sales_staff")
+    .delete()
+    .eq("staff_id", p.data.staff_id);
+  // FK from movements / access log → can't hard-delete once used.
+  if (e) return { ok: false, error: /foreign key|23503/i.test(e.message) ? "in_use" : e.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

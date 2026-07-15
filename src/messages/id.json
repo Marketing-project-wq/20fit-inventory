@@ -94,7 +94,21 @@
     "inside": "Di Dalam",
     "duration": "Durasi",
     "hoursShort": "j",
-    "minutesShort": "m"
+    "minutesShort": "m",
+    "salesOrVisitor": "Nama Sales / Visitor",
+    "selectSales": "— Pilih nama sales —",
+    "dailyWorker": "Other — Daily Worker",
+    "dwNamePlaceholder": "Masukkan nama daily worker...",
+    "dwNote": "Daily worker tidak memiliki akun sistem. Nama akan dicatat manual."
+  },
+  "transfer": {
+    "salesPerson": "Nama Sales / Penanggung Jawab",
+    "proofPhoto": "Bukti Foto",
+    "proofPhotoOptional": "Bukti Foto (Opsional)",
+    "takeOrChoosePhoto": "Ambil / Pilih Foto",
+    "photoMaxSize": "JPG, PNG, HEIC · maks. 5MB",
+    "photoTooLarge": "Ukuran foto maksimal 5MB.",
+    "photoUploadFailed": "Gagal mengunggah foto. Coba lagi."
   },
   "import": {
     "uploadPackingList": "Upload Packing List",
@@ -388,6 +402,19 @@
     "emailExists": "Email sudah terdaftar.",
     "invalidStaff": "Data staf tidak valid (periksa email).",
     "noStaff": "Belum ada staf.",
-    "staffReadOnly": "Anda hanya dapat melihat. Pengelolaan staf butuh peran Admin."
+    "staffReadOnly": "Anda hanya dapat melihat. Pengelolaan staf butuh peran Admin.",
+    "cancel": "Batal",
+    "edit": "Ubah",
+    "delete": "Hapus",
+    "salesStaff": "Sales Staff",
+    "salesStaffDesc": "Daftar nama sales untuk dropdown di Transfer dan Akses Gudang. Nonaktifkan untuk menyembunyikan dari dropdown tanpa menghapus.",
+    "addSalesStaff": "Tambah",
+    "salesStaffPlaceholder": "Nama sales baru...",
+    "salesStaffActive": "Aktif",
+    "salesStaffInactive": "Nonaktif",
+    "salesStaffDeleteConfirm": "Hapus \"{name}\" dari daftar Sales Staff?",
+    "salesStaffExists": "Nama tersebut sudah ada dalam daftar.",
+    "salesStaffInUse": "Tidak bisa dihapus — nama sudah dipakai di data transfer atau akses gudang. Nonaktifkan saja.",
+    "noSalesStaff": "Belum ada sales staff. Tambahkan nama di atas."
   }
 }

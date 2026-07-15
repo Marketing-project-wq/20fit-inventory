@@ -117,6 +117,21 @@ const transferSchema = z.object({
   notes: z.string().trim().max(500).optional(),
 });
 
+/**
+ * Reads the shared "Nama Sales / Visitor" picker: a real sales_staff_id, or the
+ * "other" sentinel meaning a daily worker whose name is typed into dw_name.
+ */
+function parseSalesSelection(formData: FormData): {
+  sales_staff_id: string | null;
+  dw_name: string | null;
+} {
+  const raw = String(formData.get("sales_staff_id") ?? "").trim();
+  const dw = String(formData.get("dw_name") ?? "").trim();
+  if (raw === "other") return { sales_staff_id: null, dw_name: dw || null };
+  if (/^[0-9a-fA-F-]{36}$/.test(raw)) return { sales_staff_id: raw, dw_name: null };
+  return { sales_staff_id: null, dw_name: null };
+}
+
 export async function recordTransfer(
   _prev: ActionState,
   formData: FormData,
@@ -129,12 +144,34 @@ export async function recordTransfer(
   if (d.from_location_id === d.to_location_id)
     return { ok: false, error: "same_location" };
 
+  const { sales_staff_id, dw_name } = parseSalesSelection(formData);
+
+  // Optional proof photo → private "transfer-photos" bucket. Store the path;
+  // the list view signs it on demand.
+  let photoPath: string | null = null;
+  const photo = formData.get("photo");
+  if (photo instanceof File && photo.size > 0) {
+    if (photo.size > 5_000_000) return { ok: false, error: "photo_too_large" };
+    const ext =
+      (photo.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") ||
+      "jpg";
+    const path = `transfers/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: upErr } = await sb!.storage
+      .from("transfer-photos")
+      .upload(path, photo, { contentType: photo.type || undefined, upsert: false });
+    if (upErr) return { ok: false, error: "photo_upload_failed" };
+    photoPath = path;
+  }
+
   const { error } = await sb!.rpc("shop_record_transfer", {
     p_variant: d.variant_id,
     p_from: d.from_location_id,
     p_to: d.to_location_id,
     p_qty: d.quantity,
     p_notes: d.notes ?? null,
+    p_sales_staff_id: sales_staff_id,
+    p_dw_name: dw_name,
+    p_photo_url: photoPath,
   });
   if (error) {
     if (error.message.includes("insufficient_stock"))
@@ -195,7 +232,6 @@ export async function approveOpname(formData: FormData): Promise<void> {
 // ------------------------- Warehouse access log ----------------------------
 const checkInSchema = z.object({
   location_id: z.string().uuid(),
-  visitor_name: z.string().trim().min(1).max(200),
   purpose: z.string().trim().max(300).optional(),
   notes: z.string().trim().max(500).optional(),
 });
@@ -210,9 +246,15 @@ export async function checkInAccess(
   if (!parsed.success) return { ok: false, error: "invalid_input" };
   const d = parsed.data;
 
+  // Visitor is either a sales staff (dropdown) or a daily worker ("Other").
+  const { sales_staff_id, dw_name } = parseSalesSelection(formData);
+  if (!sales_staff_id && !dw_name) return { ok: false, error: "invalid_input" };
+
   const { error } = await sb!.from("shop_warehouse_access_log").insert({
     location_id: d.location_id,
-    visitor_name: d.visitor_name,
+    sales_staff_id,
+    dw_name,
+    visitor_name: dw_name, // fallback for DW; sales name resolves via join
     purpose: d.purpose || null,
     notes: d.notes || null,
     user_id: user!.id,

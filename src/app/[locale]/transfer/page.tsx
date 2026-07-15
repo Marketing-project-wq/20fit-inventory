@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { format } from "date-fns";
 import { Info, ArrowRight } from "lucide-react";
-import { getSnapshot, getMovements } from "@/lib/data";
+import { getSnapshot, getSalesStaff, getRecentTransfers } from "@/lib/data";
 import { TransferForm } from "@/components/forms/TransferForm";
+import { PhotoThumb } from "@/components/ui/PhotoThumb";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,10 @@ export default async function TransferPage() {
   const tc = await getTranslations("common");
   const td = await getTranslations("dashboard");
   const snap = await getSnapshot();
-  const recent =
-    (await getMovements(250))
-      ?.filter((m) => m.movement_type === "transfer_out")
-      .slice(0, 12) ?? [];
+  const [salesStaff, recent] = await Promise.all([
+    getSalesStaff(),
+    getRecentTransfers(12),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -30,7 +31,11 @@ export default async function TransferPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <div>
             <h2 className="mb-3 text-sm font-semibold text-muted">{tf("manualEntry")}</h2>
-            <TransferForm skus={snap.skus} locations={snap.locations} />
+            <TransferForm
+              skus={snap.skus}
+              locations={snap.locations}
+              salesStaff={salesStaff}
+            />
           </div>
           <div>
             <h2 className="mb-3 text-sm font-semibold text-muted">{tf("recentTransfers")}</h2>
@@ -44,6 +49,14 @@ export default async function TransferPage() {
                     >
                       <ArrowRight size={14} className="shrink-0 text-accent" />
                       <span className="sku text-xs">{m.sku_code}</span>
+                      {(m.sales_staff_name || m.dw_name) && (
+                        <span className="truncate text-xs text-muted">
+                          {m.sales_staff_name ?? `DW: ${m.dw_name}`}
+                        </span>
+                      )}
+                      {m.photo_url && (
+                        <PhotoThumb url={m.photo_url} alt={tf("recentTransfers")} />
+                      )}
                       <span className="ml-auto font-mono text-muted">{m.quantity}</span>
                       <span className="w-16 text-right text-xs text-dim">
                         {format(new Date(m.performed_at), "dd MMM")}

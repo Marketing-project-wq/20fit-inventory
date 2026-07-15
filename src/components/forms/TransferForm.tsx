@@ -1,23 +1,40 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Camera, X } from "lucide-react";
 import { recordTransfer, type ActionState } from "@/lib/actions";
+import { SalesStaffSelect } from "@/components/ui/SalesStaffSelect";
 import { Field, Alert, inputCls } from "./ui";
 
 type Opt = { variant_id: string; sku_code: string; product_name: string };
 type Loc = { location_id: string; name: string };
+type Sales = { staff_id: string; name: string };
 
-export function TransferForm({ skus, locations }: { skus: Opt[]; locations: Loc[] }) {
+export function TransferForm({
+  skus,
+  locations,
+  salesStaff,
+}: {
+  skus: Opt[];
+  locations: Loc[];
+  salesStaff: Sales[];
+}) {
   const t = useTranslations("form");
   const tc = useTranslations("common");
+  const tt = useTranslations("transfer");
   const [state, action, pending] = useActionState<ActionState, FormData>(
     recordTransfer,
     null,
   );
   const ref = useRef<HTMLFormElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
   useEffect(() => {
-    if (state?.ok) ref.current?.reset();
+    if (state?.ok) {
+      ref.current?.reset();
+      setPreview(null);
+    }
   }, [state]);
 
   return (
@@ -33,9 +50,13 @@ export function TransferForm({ skus, locations }: { skus: Opt[]; locations: Loc[
             ? t("insufficientStock")
             : state.error === "same_location"
               ? t("sameLocation")
-              : state.error === "not_configured"
-                ? t("notConfigured")
-                : t("invalidInput")}
+              : state.error === "photo_too_large"
+                ? tt("photoTooLarge")
+                : state.error === "photo_upload_failed"
+                  ? tt("photoUploadFailed")
+                  : state.error === "not_configured"
+                    ? t("notConfigured")
+                    : t("invalidInput")}
         </Alert>
       )}
 
@@ -90,6 +111,76 @@ export function TransferForm({ skus, locations }: { skus: Opt[]; locations: Loc[
         <Field label={tc("notes")} hint={t("optional")}>
           <input name="notes" type="text" className={inputCls} />
         </Field>
+      </div>
+
+      <SalesStaffSelect staff={salesStaff} label={tt("salesPerson")} />
+
+      {/* Proof photo (optional) */}
+      <div>
+        <span className="mb-1 block text-xs font-medium text-muted">
+          {tt("proofPhotoOptional")}
+        </span>
+        <label
+          htmlFor="transfer-photo"
+          className="flex min-h-[80px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-surface-2 p-3 transition-colors hover:border-accent"
+        >
+          {preview ? (
+            <div className="relative w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt={tt("proofPhoto")}
+                className="max-h-48 w-full rounded object-cover"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setPreview(null);
+                  if (ref.current) {
+                    const input = ref.current.elements.namedItem(
+                      "photo",
+                    ) as HTMLInputElement | null;
+                    if (input) input.value = "";
+                  }
+                }}
+                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+                aria-label={tc("cancel")}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <Camera size={22} className="text-muted" />
+              <span className="text-xs font-medium text-muted">
+                {tt("takeOrChoosePhoto")}
+              </span>
+              <span className="text-xs text-dim">{tt("photoMaxSize")}</span>
+            </>
+          )}
+          <input
+            id="transfer-photo"
+            name="photo"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) {
+                setPreview(null);
+                return;
+              }
+              if (file.size > 5 * 1024 * 1024) {
+                alert(tt("photoTooLarge"));
+                e.target.value = "";
+                setPreview(null);
+                return;
+              }
+              setPreview(URL.createObjectURL(file));
+            }}
+          />
+        </label>
       </div>
 
       <button
