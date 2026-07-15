@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   DoorOpen,
   BarChart3,
+  ScrollText,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export type NavItem = {
     | "stockOpname"
     | "warehouseAccess"
     | "reports"
+    | "activityLog"
     | "settings";
   icon: LucideIcon;
 };
@@ -42,5 +44,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/stock-opname", key: "stockOpname", icon: ClipboardCheck },
   { href: "/akses-gudang", key: "warehouseAccess", icon: DoorOpen },
   { href: "/laporan", key: "reports", icon: BarChart3 },
+  { href: "/log-aktivitas", key: "activityLog", icon: ScrollText },
   { href: "/pengaturan", key: "settings", icon: Settings },
 ];

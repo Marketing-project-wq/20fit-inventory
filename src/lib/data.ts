@@ -538,6 +538,56 @@ export async function getWarrantyClaims(limit = 100): Promise<WarrantyClaim[] | 
   });
 }
 
+// ------------------------------ Activity log -------------------------------
+export type AuditLogRow = {
+  log_id: string;
+  user_email: string | null;
+  user_name: string | null;
+  action: string;
+  entity_type: string | null;
+  description: string | null;
+  module: string | null;
+  before_value: Record<string, unknown> | null;
+  after_value: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type AuditLogFilters = {
+  search?: string;
+  module?: string;
+  user?: string;
+  from?: string; // yyyy-mm-dd
+  to?: string;
+};
+
+const AUDIT_COLS =
+  "log_id,user_email,user_name,action,entity_type,description,module,before_value,after_value,created_at";
+
+export const AUDIT_PAGE_SIZE = 50;
+
+/** Paginated audit-log rows for the Activity Log page (newest first). */
+export async function getAuditLogs(
+  filters: AuditLogFilters,
+  page: number,
+  pageSize = AUDIT_PAGE_SIZE,
+): Promise<{ rows: AuditLogRow[]; total: number } | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+  let q = sb
+    .from("shop_audit_logs")
+    .select(AUDIT_COLS, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(page * pageSize, (page + 1) * pageSize - 1);
+  if (filters.module) q = q.eq("module", filters.module);
+  if (filters.user) q = q.ilike("user_email", `%${filters.user}%`);
+  if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00`);
+  if (filters.to) q = q.lte("created_at", `${filters.to}T23:59:59`);
+  if (filters.search) q = q.ilike("description", `%${filters.search}%`);
+  const { data, count, error } = await q;
+  if (error) return null;
+  return { rows: (data ?? []) as unknown as AuditLogRow[], total: count ?? 0 };
+}
+
 // ------------------------------- Settings ----------------------------------
 export type SkuAdmin = {
   variant_id: string;

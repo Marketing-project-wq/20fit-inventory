@@ -15,6 +15,7 @@
     "stockOpname": "Stock Opname",
     "warehouseAccess": "Akses Gudang",
     "reports": "Laporan",
+    "activityLog": "Log Aktivitas",
     "settings": "Pengaturan"
   },
   "dashboard": {
@@ -141,6 +142,41 @@
     "status_rejected": "Ditolak",
     "status_closed": "Ditutup",
     "noClaims": "Belum ada klaim garansi."
+  },
+  "activityLog": {
+    "title": "Log Aktivitas",
+    "subtitle": "Rekam jejak semua perubahan data di sistem",
+    "entryCount": "{count} entri",
+    "exportCsv": "Export CSV",
+    "searchPlaceholder": "Cari di deskripsi aktivitas...",
+    "filterModule": "Semua Modul",
+    "filterUser": "Filter email user...",
+    "filterFrom": "Dari tanggal",
+    "filterTo": "Sampai tanggal",
+    "resetFilter": "Reset Filter",
+    "noActivity": "Tidak ada aktivitas ditemukan",
+    "showingOf": "Menampilkan {from}–{to} dari {total}",
+    "prev": "Sebelumnya",
+    "next": "Berikutnya",
+    "colTime": "Waktu",
+    "colUser": "User",
+    "colModule": "Modul",
+    "colActivity": "Aktivitas",
+    "colDetail": "Detail",
+    "system": "System",
+    "viewChanges": "{count} Perubahan",
+    "diffTitle": "Detail Perubahan",
+    "before": "Sebelum",
+    "after": "Sesudah",
+    "modules": {
+      "barang_masuk": "Barang Masuk",
+      "barang_keluar": "Barang Keluar",
+      "transfer": "Transfer",
+      "stock_opname": "Stock Opname",
+      "pengaturan": "Pengaturan",
+      "mutasi_stok": "Mutasi Stok",
+      "laporan": "Laporan"
+    }
   },
   "stock": {
     "inStock": "Tersedia",
