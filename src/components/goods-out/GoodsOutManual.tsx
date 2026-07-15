@@ -13,6 +13,7 @@ import type { Movement } from "@/lib/data";
 import { StockOutForm } from "@/components/forms/StockOutForm";
 import { RecentMovements } from "@/components/movements/RecentMovements";
 import { cn } from "@/lib/utils";
+import { ScanPrefillBanner } from "@/components/scan/ScanPrefillBanner";
 import { WarrantyOutForm, type StockByLoc } from "./WarrantyOutForm";
 import { SimpleGoodsOutForm } from "./SimpleGoodsOutForm";
 
@@ -67,17 +68,21 @@ export function GoodsOutManual({
   locations,
   recent,
   stockByLoc,
+  preselectVariantId,
 }: {
   skus: Opt[];
   locations: Loc[];
   recent: Movement[];
   stockByLoc: StockByLoc[];
+  preselectVariantId?: string;
 }) {
   const t = useTranslations("goodsOut");
   const [type, setType] = useState<GoodsOutType>("sale");
+  const scannedSku = skus.find((s) => s.variant_id === preselectVariantId)?.sku_code;
 
   return (
     <div className="space-y-5">
+      {scannedSku && <ScanPrefillBanner sku={scannedSku} />}
       <div>
         <span className="mb-2 block text-xs font-medium text-muted">
           {t("goodsOutType")}
@@ -116,9 +121,20 @@ export function GoodsOutManual({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {type === "sale" && <StockOutForm skus={skus} locations={locations} />}
+        {type === "sale" && (
+          <StockOutForm
+            skus={skus}
+            locations={locations}
+            preselectVariantId={preselectVariantId}
+          />
+        )}
         {type === "warranty" && (
-          <WarrantyOutForm skus={skus} locations={locations} stockByLoc={stockByLoc} />
+          <WarrantyOutForm
+            skus={skus}
+            locations={locations}
+            stockByLoc={stockByLoc}
+            preselectVariantId={preselectVariantId}
+          />
         )}
         {type === "disposal" && (
           <SimpleGoodsOutForm
@@ -126,6 +142,7 @@ export function GoodsOutManual({
             skus={skus}
             locations={locations}
             stockByLoc={stockByLoc}
+            preselectVariantId={preselectVariantId}
           />
         )}
         {type === "return_supplier" && (
@@ -134,6 +151,7 @@ export function GoodsOutManual({
             skus={skus}
             locations={locations}
             stockByLoc={stockByLoc}
+            preselectVariantId={preselectVariantId}
           />
         )}
         <RecentMovements movements={recent} direction="out" />

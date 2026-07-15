@@ -9,6 +9,7 @@ import { RecentMovements } from "@/components/movements/RecentMovements";
 import { cn } from "@/lib/utils";
 import { ReturnInForm } from "./ReturnInForm";
 import { DamageInForm } from "./DamageInForm";
+import { ScanPrefillBanner } from "@/components/scan/ScanPrefillBanner";
 
 type Opt = {
   variant_id: string;
@@ -35,16 +36,20 @@ export function GoodsInManual({
   skus,
   locations,
   recent,
+  preselectVariantId,
 }: {
   skus: Opt[];
   locations: Loc[];
   recent: Movement[];
+  preselectVariantId?: string;
 }) {
   const t = useTranslations("goodsIn");
   const [type, setType] = useState<GoodsInType>("normal");
+  const scannedSku = skus.find((s) => s.variant_id === preselectVariantId)?.sku_code;
 
   return (
     <div className="space-y-5">
+      {scannedSku && <ScanPrefillBanner sku={scannedSku} />}
       <div>
         <span className="mb-2 block text-xs font-medium text-muted">
           {t("receiptType")}
@@ -74,9 +79,27 @@ export function GoodsInManual({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {type === "normal" && <StockInForm skus={skus} locations={locations} />}
-        {type === "return" && <ReturnInForm skus={skus} locations={locations} />}
-        {type === "damaged" && <DamageInForm skus={skus} locations={locations} />}
+        {type === "normal" && (
+          <StockInForm
+            skus={skus}
+            locations={locations}
+            preselectVariantId={preselectVariantId}
+          />
+        )}
+        {type === "return" && (
+          <ReturnInForm
+            skus={skus}
+            locations={locations}
+            preselectVariantId={preselectVariantId}
+          />
+        )}
+        {type === "damaged" && (
+          <DamageInForm
+            skus={skus}
+            locations={locations}
+            preselectVariantId={preselectVariantId}
+          />
+        )}
         <RecentMovements movements={recent} direction="in" />
       </div>
     </div>

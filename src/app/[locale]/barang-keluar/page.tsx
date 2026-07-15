@@ -15,7 +15,11 @@ const OUT_TYPES = [
   "warranty_out",
 ];
 
-export default async function BarangKeluarPage() {
+export default async function BarangKeluarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ variant?: string }>;
+}) {
   const t = await getTranslations("nav");
   const td = await getTranslations("dashboard");
   const snap = await getSnapshot();
@@ -35,6 +39,11 @@ export default async function BarangKeluarPage() {
       damaged: r.damaged,
     })) ?? [];
 
+  // Pre-fill from a QR scan (?variant=…), validated against the SKU list.
+  const { variant } = await searchParams;
+  const preselectVariantId =
+    variant && snap?.skus.some((s) => s.variant_id === variant) ? variant : undefined;
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight text-fg">{t("goodsOut")}</h1>
@@ -51,6 +60,7 @@ export default async function BarangKeluarPage() {
           recent={recent}
           stockByLoc={stockByLoc}
           claims={claims}
+          preselectVariantId={preselectVariantId}
         />
       )}
     </div>

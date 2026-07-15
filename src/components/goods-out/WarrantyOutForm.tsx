@@ -21,10 +21,12 @@ export function WarrantyOutForm({
   skus,
   locations,
   stockByLoc,
+  preselectVariantId,
 }: {
   skus: Opt[];
   locations: Loc[];
   stockByLoc: StockByLoc[];
+  preselectVariantId?: string;
 }) {
   const t = useTranslations("goodsOut");
   const tf = useTranslations("form");
@@ -34,7 +36,7 @@ export function WarrantyOutForm({
     null,
   );
   const ref = useRef<HTMLFormElement>(null);
-  const [variantId, setVariantId] = useState("");
+  const [variantId, setVariantId] = useState(preselectVariantId ?? "");
   const [locationId, setLocationId] = useState(locations[0]?.location_id ?? "");
   const [quantity, setQuantity] = useState("");
   const [reason, setReason] = useState("");

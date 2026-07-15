@@ -11,7 +11,15 @@ import { ItemPhotoField } from "./ItemPhotoField";
 type Opt = { variant_id: string; sku_code: string; product_name: string };
 type Loc = { location_id: string; name: string };
 
-export function ReturnInForm({ skus, locations }: { skus: Opt[]; locations: Loc[] }) {
+export function ReturnInForm({
+  skus,
+  locations,
+  preselectVariantId,
+}: {
+  skus: Opt[];
+  locations: Loc[];
+  preselectVariantId?: string;
+}) {
   const t = useTranslations("goodsIn");
   const tf = useTranslations("form");
   const tc = useTranslations("common");
@@ -56,7 +64,12 @@ export function ReturnInForm({ skus, locations }: { skus: Opt[]; locations: Loc[
       <input type="hidden" name="item_condition" value={condition} />
 
       <Field label={t("returnedSku")}>
-        <select name="variant_id" required defaultValue="" className={inputCls}>
+        <select
+          name="variant_id"
+          required
+          defaultValue={preselectVariantId ?? ""}
+          className={inputCls}
+        >
           <option value="" disabled>
             {tf("selectSku")}
           </option>

@@ -20,11 +20,13 @@ export function SimpleGoodsOutForm({
   skus,
   locations,
   stockByLoc,
+  preselectVariantId,
 }: {
   kind: "disposal" | "return_supplier";
   skus: Opt[];
   locations: Loc[];
   stockByLoc: StockByLoc[];
+  preselectVariantId?: string;
 }) {
   const t = useTranslations("goodsOut");
   const tf = useTranslations("form");
@@ -34,7 +36,7 @@ export function SimpleGoodsOutForm({
     null,
   );
   const ref = useRef<HTMLFormElement>(null);
-  const [variantId, setVariantId] = useState("");
+  const [variantId, setVariantId] = useState(preselectVariantId ?? "");
   const [locationId, setLocationId] = useState(locations[0]?.location_id ?? "");
   const [quantity, setQuantity] = useState("");
 

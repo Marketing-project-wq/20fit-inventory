@@ -478,7 +478,9 @@
     "lookupError": "Failed to load data. Please scan again.",
     "unauthorized": "Session expired. Please sign in again.",
     "cameraError": "Cannot access the camera. Please make sure camera permission is granted.",
-    "scanAgain": "Scan Again"
+    "scanAgain": "Scan Again",
+    "prefilledTitle": "SKU Filled from Scan",
+    "prefilledHint": "{sku} · enter the quantity and save"
   },
   "settings": {
     "subtitle": "Manage SKUs & prices, warehouse locations, and your account.",

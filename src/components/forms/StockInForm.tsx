@@ -19,7 +19,15 @@ type Opt = {
 };
 type Loc = { location_id: string; name: string };
 
-export function StockInForm({ skus, locations }: { skus: Opt[]; locations: Loc[] }) {
+export function StockInForm({
+  skus,
+  locations,
+  preselectVariantId,
+}: {
+  skus: Opt[];
+  locations: Loc[];
+  preselectVariantId?: string;
+}) {
   const t = useTranslations("form");
   const tc = useTranslations("common");
   const [state, action, pending] = useActionState<ActionState, FormData>(
@@ -29,9 +37,13 @@ export function StockInForm({ skus, locations }: { skus: Opt[]; locations: Loc[]
   const ref = useRef<HTMLFormElement>(null);
 
   // SKU + cost are controlled so we can auto-fill the cost from the master
-  // cost_price when a SKU is picked (still editable — an override).
-  const [variantId, setVariantId] = useState("");
-  const [unitCost, setUnitCost] = useState("");
+  // cost_price when a SKU is picked (still editable — an override). A scanned
+  // SKU (?variant=…) seeds both up front.
+  const [variantId, setVariantId] = useState(preselectVariantId ?? "");
+  const [unitCost, setUnitCost] = useState(() => {
+    const sku = skus.find((s) => s.variant_id === preselectVariantId);
+    return sku?.cost_price != null ? String(Math.round(Number(sku.cost_price))) : "";
+  });
 
   useEffect(() => {
     if (state?.ok) {
@@ -115,7 +127,14 @@ export function StockInForm({ skus, locations }: { skus: Opt[]; locations: Loc[]
           </select>
         </Field>
         <Field label={tc("quantity")}>
-          <input name="quantity" type="number" min={1} required className={inputCls} />
+          <input
+            name="quantity"
+            type="number"
+            min={1}
+            required
+            autoFocus={Boolean(preselectVariantId)}
+            className={inputCls}
+          />
         </Field>
       </div>
 

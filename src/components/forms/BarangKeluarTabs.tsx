@@ -25,12 +25,14 @@ export function BarangKeluarTabs({
   recent,
   stockByLoc,
   claims,
+  preselectVariantId,
 }: {
   skus: Opt[];
   locations: Loc[];
   recent: Movement[];
   stockByLoc: StockByLoc[];
   claims: WarrantyClaim[];
+  preselectVariantId?: string;
 }) {
   const tf = useTranslations("form");
   const tx = useTranslations("xero");
@@ -59,6 +61,7 @@ export function BarangKeluarTabs({
           locations={locations}
           recent={recent}
           stockByLoc={stockByLoc}
+          preselectVariantId={preselectVariantId}
         />
       </Tabs.Content>
       <Tabs.Content value="warranty" className="focus:outline-none">
