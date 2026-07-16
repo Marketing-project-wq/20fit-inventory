@@ -66,7 +66,7 @@ export function AddSkuDrawer({
             role="dialog"
             aria-modal="true"
             aria-label={tp("addSkuNew")}
-            className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl overflow-y-auto border-l border-border bg-surface-solid shadow-xl"
+            className="fixed inset-y-0 right-0 z-50 w-full max-w-3xl overflow-y-auto border-l border-border bg-surface-solid shadow-xl"
           >
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-surface-solid px-5 py-4">
               <div>

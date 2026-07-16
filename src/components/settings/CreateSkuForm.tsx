@@ -117,9 +117,12 @@ export function CreateSkuForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4 rounded-xl border border-border bg-surface p-5"
+      className="@container space-y-4 rounded-xl border border-border bg-surface p-5"
     >
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Columns follow the FORM width (container query), not the viewport, so the
+          form stays readable inside a narrow drawer (2 cols) yet uses 3 cols on
+          the wide Settings page. */}
+      <div className="grid gap-4 @sm:grid-cols-2 @3xl:grid-cols-3">
         <Field label={tp("productName")}>
           <input
             ref={nameRef}
