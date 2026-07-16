@@ -100,7 +100,7 @@ export function ProductTable({ skus }: { skus: Sku[] }) {
       />
 
       <div className="overflow-x-auto rounded-xl border border-border bg-surface">
-        <table className="w-full text-sm md:min-w-[840px]">
+        <table className="w-full min-w-[520px] text-sm md:min-w-[840px]">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted">
               <th className="hidden px-4 py-3 font-medium md:table-cell">QR</th>

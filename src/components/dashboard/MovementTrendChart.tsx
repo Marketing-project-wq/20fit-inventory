@@ -85,7 +85,7 @@ export function MovementTrendChart({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
+            <BarChart data={data} margin={{ top: 4, right: 4, left: -14, bottom: 8 }}>
               <CartesianGrid
                 strokeDasharray="3 3"
                 stroke="var(--border)"

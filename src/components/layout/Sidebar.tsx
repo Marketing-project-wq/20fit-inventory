@@ -31,7 +31,7 @@ export function Sidebar({
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border bg-surface transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+          "app-sidebar fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-border transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full",
         )}
         style={{ paddingLeft: "var(--safe-left)" }}
@@ -60,7 +60,7 @@ export function Sidebar({
                 href={href}
                 onClick={onClose}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors lg:text-sm",
                   active
                     ? "bg-accent text-white shadow-sm"
                     : "text-muted hover:bg-surface-2 hover:text-fg",

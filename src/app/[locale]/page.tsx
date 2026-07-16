@@ -98,21 +98,22 @@ export default async function DashboardPage() {
       )}
 
       {/* KPI cards. The inventory-value card (index 0) holds a long IDR figure,
-          so it spans both mobile columns to avoid clipping. */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+          so it spans two columns at every breakpoint (2-of-6 on xl) — that
+          keeps the number on one line instead of breaking mid-figure. */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
         {kpis.map((k, i) => (
           <div
             key={k.label}
             className={cn(
-              "rounded-xl border border-border bg-surface p-4 sm:p-5",
-              i === 0 && "col-span-2 xl:col-span-1",
+              "min-w-0 overflow-hidden rounded-xl border border-border bg-surface p-4 sm:p-5",
+              i === 0 && "col-span-2 xl:col-span-2",
             )}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm text-muted">{k.label}</span>
+              <span className="truncate text-sm text-muted">{k.label}</span>
               <k.icon size={18} className={cn("shrink-0", toneText[k.tone])} />
             </div>
-            <div className="mt-3 font-mono text-xl font-bold break-words text-fg sm:text-2xl">
+            <div className="mt-3 truncate font-mono text-xl font-bold whitespace-nowrap text-fg sm:text-2xl">
               {k.value}
             </div>
           </div>
