@@ -11,7 +11,7 @@ export function LanguageSwitcher() {
   const router = useRouter();
 
   return (
-    <div className="flex items-center overflow-hidden rounded-lg border border-border text-xs font-semibold">
+    <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-border text-xs font-semibold">
       {routing.locales.map((l) => (
         <button
           key={l}
