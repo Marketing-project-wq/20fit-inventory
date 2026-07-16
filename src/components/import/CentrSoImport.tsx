@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { FileText, Info, Loader2, CheckCircle2, Upload } from "lucide-react";
 import {
@@ -12,6 +12,7 @@ import {
 import type { CentrSoMeta } from "@/lib/centr";
 import { inputCls } from "@/components/forms/ui";
 import { cn } from "@/lib/utils";
+import { AddSkuDrawer, type CreatedSku } from "./AddSkuDrawer";
 
 type Opt = { variant_id: string; sku_code: string; product_name: string };
 type Loc = { location_id: string; name: string };
@@ -30,12 +31,14 @@ export function CentrSoImport({
   const [meta, setMeta] = useState<CentrSoMeta | null>(null);
   const [rows, setRows] = useState<CentrReviewRow[]>([]);
   const [locationId, setLocationId] = useState(locations[0]?.location_id ?? "");
+  const [localSkus, setLocalSkus] = useState<Opt[]>(skus);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ count: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const matched = rows.filter((r) => r.matched);
   const unmatched = rows.length - matched.length;
+  const existingSkus = useMemo(() => localSkus.map((s) => s.sku_code), [localSkus]);
 
   async function onFile(file: File) {
     setStep("parsing");
@@ -53,15 +56,14 @@ export function CentrSoImport({
     setStep("review");
   }
 
-  function onManualMatch(i: number, variantId: string) {
-    const sku = skus.find((s) => s.variant_id === variantId);
-    if (!sku) return;
+  // Map row i to a SKU (from the dropdown or a freshly-created one) and learn it.
+  function matchRow(i: number, sku: { variant_id: string; sku_code: string; product_name: string }) {
     setRows((prev) =>
       prev.map((r, idx) =>
         idx === i
           ? {
               ...r,
-              variant_id: variantId,
+              variant_id: sku.variant_id,
               sku_code: sku.sku_code,
               product_name: sku.product_name,
               matched: true,
@@ -73,8 +75,18 @@ export function CentrSoImport({
     void saveCentrMapping({
       centr_item_code: rows[i].centr_item_code,
       centr_item_name: rows[i].item_name,
-      variant_id: variantId,
+      variant_id: sku.variant_id,
     });
+  }
+
+  function onManualMatch(i: number, variantId: string) {
+    const sku = localSkus.find((s) => s.variant_id === variantId);
+    if (sku) matchRow(i, sku);
+  }
+
+  function onCreatedForRow(i: number, sku: CreatedSku) {
+    setLocalSkus((prev) => [...prev, sku]);
+    matchRow(i, sku);
   }
 
   async function onConfirm() {
@@ -265,20 +277,28 @@ export function CentrSoImport({
                   {r.matched ? (
                     <span className="sku text-xs">{r.sku_code}</span>
                   ) : (
-                    <select
-                      defaultValue=""
-                      onChange={(e) => onManualMatch(i, e.target.value)}
-                      className="w-full rounded-lg border border-warning/50 bg-bg px-2 py-1 text-xs text-fg outline-none focus:border-accent"
-                    >
-                      <option value="" disabled>
-                        {t("pickSku")}
-                      </option>
-                      {skus.map((s) => (
-                        <option key={s.variant_id} value={s.variant_id}>
-                          {s.sku_code} — {s.product_name}
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value=""
+                        onChange={(e) => onManualMatch(i, e.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-warning/50 bg-bg px-2 py-1 text-xs text-fg outline-none focus:border-accent"
+                      >
+                        <option value="" disabled>
+                          {t("pickSku")}
                         </option>
-                      ))}
-                    </select>
+                        {localSkus.map((s) => (
+                          <option key={s.variant_id} value={s.variant_id}>
+                            {s.sku_code} — {s.product_name}
+                          </option>
+                        ))}
+                      </select>
+                      <AddSkuDrawer
+                        compact
+                        existingSkus={existingSkus}
+                        defaultName={r.item_name}
+                        onCreated={(sku) => onCreatedForRow(i, sku)}
+                      />
+                    </div>
                   )}
                 </td>
               </tr>

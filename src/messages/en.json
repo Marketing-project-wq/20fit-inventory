@@ -280,6 +280,7 @@
   },
   "import": {
     "uploadPackingList": "Upload Packing List",
+    "addSkuFromRow": "The new SKU is mapped to this row immediately and remembered for the next import.",
     "uploadXeroQuotation": "Upload Xero Quotation",
     "reviewMapping": "Review SKU Mapping",
     "mappedAuto": "Auto-matched",

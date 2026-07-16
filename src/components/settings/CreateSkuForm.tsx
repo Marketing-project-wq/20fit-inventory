@@ -22,11 +22,14 @@ export function CreateSkuForm({
   brands,
   existingSkus,
   onCreated,
+  defaultName,
 }: {
   categories: Opt[];
   brands: Opt[];
   existingSkus: string[];
   onCreated: (row: SkuAdmin) => void;
+  /** Pre-fills the product name (e.g. from an import row that has no SKU yet). */
+  defaultName?: string;
 }) {
   const t = useTranslations("settings");
   const tp = useTranslations("product");
@@ -118,7 +121,14 @@ export function CreateSkuForm({
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={tp("productName")}>
-          <input ref={nameRef} name="name" required maxLength={300} className={inputCls} />
+          <input
+            ref={nameRef}
+            name="name"
+            required
+            maxLength={300}
+            defaultValue={defaultName}
+            className={inputCls}
+          />
         </Field>
         <Field label={tp("skuCode")}>
           <div className="flex items-stretch gap-2">

@@ -21,6 +21,7 @@ import { importPackingList } from "@/lib/import-actions";
 import type { MatchedRow, SkuLite } from "@/lib/import";
 import { cn } from "@/lib/utils";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
+import { AddSkuDrawer, type CreatedSku } from "./AddSkuDrawer";
 
 type Loc = { location_id: string; name: string };
 type Step = "upload" | "mapping" | "review" | "done";
@@ -64,6 +65,8 @@ export function PackingListImport({
     "";
 
   const [step, setStep] = useState<Step>("upload");
+  const [localSkus, setLocalSkus] = useState<SkuLite[]>(skus);
+  const existingSkus = useMemo(() => localSkus.map((s) => s.sku_code), [localSkus]);
   const [rows, setRows] = useState<MatchedRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [nameCol, setNameCol] = useState<string>("");
@@ -160,12 +163,23 @@ export function PackingListImport({
       });
       return;
     }
-    const s = skus.find((x) => x.variant_id === variantId);
+    const s = localSkus.find((x) => x.variant_id === variantId);
     if (!s) return;
     patchRow(i, {
       variant_id: s.variant_id,
       matched_sku: s.sku_code,
       matched_name: s.product_name,
+      status: "matched",
+      include: (rows[i]?.quantity ?? 0) > 0,
+    });
+  }
+
+  function onCreatedForRow(i: number, sku: CreatedSku) {
+    setLocalSkus((prev) => [...prev, sku]);
+    patchRow(i, {
+      variant_id: sku.variant_id,
+      matched_sku: sku.sku_code,
+      matched_name: sku.product_name,
       status: "matched",
       include: (rows[i]?.quantity ?? 0) > 0,
     });
@@ -449,18 +463,28 @@ export function PackingListImport({
                     </div>
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      value={r.variant_id ?? ""}
-                      onChange={(e) => selectSku(i, e.target.value)}
-                      className={cn(inputCls, "min-w-[220px] py-1.5")}
-                    >
-                      <option value="">— {tf("selectSku")} —</option>
-                      {skus.map((s) => (
-                        <option key={s.variant_id} value={s.variant_id}>
-                          {s.sku_code} — {s.product_name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={r.variant_id ?? ""}
+                        onChange={(e) => selectSku(i, e.target.value)}
+                        className={cn(inputCls, "min-w-[200px] py-1.5")}
+                      >
+                        <option value="">— {tf("selectSku")} —</option>
+                        {localSkus.map((s) => (
+                          <option key={s.variant_id} value={s.variant_id}>
+                            {s.sku_code} — {s.product_name}
+                          </option>
+                        ))}
+                      </select>
+                      {!r.variant_id && (
+                        <AddSkuDrawer
+                          compact
+                          existingSkus={existingSkus}
+                          defaultName={r.raw_name}
+                          onCreated={(sku) => onCreatedForRow(i, sku)}
+                        />
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-right">
                     <input

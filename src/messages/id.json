@@ -280,6 +280,7 @@
   },
   "import": {
     "uploadPackingList": "Upload Packing List",
+    "addSkuFromRow": "SKU baru langsung dipetakan ke baris ini dan diingat untuk import berikutnya.",
     "uploadXeroQuotation": "Upload Quotation Xero",
     "reviewMapping": "Tinjau Pemetaan SKU",
     "mappedAuto": "Cocok Otomatis",
