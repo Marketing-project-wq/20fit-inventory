@@ -100,7 +100,7 @@ export default async function OpnameDetailPage({
             <p className="mb-3 text-sm text-muted">{to("approveHint")}</p>
             <button
               type="submit"
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-bg transition hover:opacity-90"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             >
               {to("approve")}
             </button>

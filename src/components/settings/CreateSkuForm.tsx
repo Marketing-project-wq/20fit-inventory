@@ -194,7 +194,7 @@ export function CreateSkuForm({
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
       >
         {pending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
         {t("createSku")}

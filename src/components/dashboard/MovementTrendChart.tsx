@@ -67,7 +67,7 @@ export function MovementTrendChart({
                 onClick={() => setGran(g)}
                 className={cn(
                   "px-3 py-1.5 transition-colors",
-                  gran === g ? "bg-accent text-bg" : "text-muted hover:text-fg",
+                  gran === g ? "bg-accent text-white" : "text-muted hover:text-fg",
                 )}
                 aria-pressed={gran === g}
               >

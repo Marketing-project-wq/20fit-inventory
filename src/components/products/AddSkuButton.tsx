@@ -30,7 +30,7 @@ export function AddSkuButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-bg transition hover:opacity-90"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
       >
         <Plus size={16} />
         <span className="hidden sm:inline">{t("addSku")}</span>
