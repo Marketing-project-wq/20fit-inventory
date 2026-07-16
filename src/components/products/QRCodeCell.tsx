@@ -49,7 +49,7 @@ export function QRCodeCell({ sku }: { sku: string }) {
             <a
               href={src(600, "&download=1")}
               download
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-bg transition hover:opacity-90"
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             >
               <Download size={16} /> PNG
             </a>

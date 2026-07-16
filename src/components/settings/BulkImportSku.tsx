@@ -227,7 +227,7 @@ export function BulkImportSku({ onImported }: { onImported?: () => void }) {
             <button
               onClick={doImport}
               disabled={preview.valid === 0}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
               {t("importNValidSku", { n: preview.valid })}
             </button>

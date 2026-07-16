@@ -206,7 +206,7 @@ export function SalesStaffManager({ staff }: { staff: SalesStaff[] }) {
         <button
           onClick={add}
           disabled={pending || !newName.trim()}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {pending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
           {t("addSalesStaff")}

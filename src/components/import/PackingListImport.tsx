@@ -250,7 +250,7 @@ export function PackingListImport({
             ref={fileRef}
             type="file"
             accept=".xlsx,.xls,.csv"
-            className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-bg hover:file:opacity-90"
+            className="block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
           />
         </Field>
 
@@ -259,7 +259,7 @@ export function PackingListImport({
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {pending ? (
             <Loader2 size={16} className="animate-spin" />
@@ -325,7 +325,7 @@ export function PackingListImport({
           <button
             onClick={applyMapping}
             disabled={pending || nameCol === "" || qtyCol === ""}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
             {pending ? <Loader2 size={16} className="animate-spin" /> : null}
             {t("applyMapping")}
@@ -509,7 +509,7 @@ export function PackingListImport({
           <button
             onClick={confirm}
             disabled={pending || summary.included === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
           >
             {pending ? (
               <Loader2 size={16} className="animate-spin" />

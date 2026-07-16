@@ -222,7 +222,7 @@ export function QrScanner() {
                 <p className="text-sm text-danger">{errorMsg}</p>
                 <button
                   onClick={start}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-bg transition hover:opacity-90"
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
                 >
                   <RotateCcw size={16} />
                   {t("retry")}
@@ -234,7 +234,7 @@ export function QrScanner() {
                 <p className="max-w-xs text-sm text-muted">{t("instruction")}</p>
                 <button
                   onClick={start}
-                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90"
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
                 >
                   <Camera size={16} />
                   {t("start")}

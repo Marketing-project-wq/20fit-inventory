@@ -37,7 +37,7 @@ export function ResetPasswordForm({
           </Alert>
           <Link
             href="/lupa-sandi"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           >
             {t("forgotTitle")}
           </Link>
@@ -56,7 +56,7 @@ export function ResetPasswordForm({
           <p className="text-sm text-fg/90">{t("passwordUpdated")}</p>
           <Link
             href="/login"
-            className="inline-flex w-full items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           >
             {t("signIn")}
           </Link>
@@ -117,7 +117,7 @@ export function ResetPasswordForm({
         <button
           type="submit"
           disabled={pending}
-          className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-bg transition hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {pending ? tc("loading") : t("updatePassword")}
         </button>
