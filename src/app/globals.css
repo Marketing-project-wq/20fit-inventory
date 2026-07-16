@@ -125,6 +125,20 @@ body {
   box-shadow: var(--glass-shadow);
 }
 
+/* Sidebar: as a mobile drawer it overlays page content, so a translucent glass
+   background would let the content (and the header logo) bleed through. Keep it
+   opaque below lg; restore the glass look on desktop where it sits in the flow. */
+.app-sidebar {
+  background-color: var(--surface-solid);
+}
+@media (min-width: 1024px) {
+  .app-sidebar {
+    background-color: var(--surface);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+}
+
 /* ---------------------------- Typography --------------------------------- */
 .font-display {
   font-family: var(--font-display);
