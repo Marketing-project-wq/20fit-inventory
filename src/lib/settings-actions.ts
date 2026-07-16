@@ -6,6 +6,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "@/lib/import-server";
 
 export type SettingsResult = { ok: boolean; error?: string; id?: string };
+
+export type SkuFormOptions = {
+  categories: { id: string; name: string }[];
+  brands: { id: string; name: string }[];
+};
+
+/** Category + brand options for the inline Create-SKU drawer (import screens).
+ *  Lazy-loaded on demand so import panels don't need them threaded as props. */
+export async function loadSkuFormOptions(): Promise<SkuFormOptions> {
+  const { sb, error } = await requireUser();
+  if (error || !sb) return { categories: [], brands: [] };
+  const [cats, brands] = await Promise.all([
+    sb.from("shop_categories").select("category_id,name").order("name"),
+    sb.from("shop_brands").select("brand_id,name").order("name"),
+  ]);
+  return {
+    categories: (cats.data ?? []).map((c) => ({ id: c.category_id, name: c.name })),
+    brands: (brands.data ?? []).map((b) => ({ id: b.brand_id, name: b.name })),
+  };
+}
 export type SettingsState = {
   ok: boolean;
   error?: string;
