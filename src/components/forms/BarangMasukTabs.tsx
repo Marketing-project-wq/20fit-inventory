@@ -2,9 +2,10 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import { useTranslations } from "next-intl";
-import { PenLine, FileSpreadsheet } from "lucide-react";
+import { PenLine, FileSpreadsheet, FileText } from "lucide-react";
 import { GoodsInManual } from "@/components/goods-in/GoodsInManual";
 import { PackingListImport } from "@/components/import/PackingListImport";
+import { CentrSoImport } from "@/components/import/CentrSoImport";
 import type { Movement } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -35,10 +36,11 @@ export function BarangMasukTabs({
 }) {
   const tf = useTranslations("form");
   const ti = useTranslations("import");
+  const tcentr = useTranslations("centr");
 
   return (
     <Tabs.Root defaultValue="manual">
-      <Tabs.List className="mb-5 flex items-center gap-5 border-b border-border">
+      <Tabs.List className="mb-5 flex flex-wrap items-center gap-5 border-b border-border">
         <Tabs.Trigger value="manual" className={triggerCls}>
           <PenLine size={15} />
           {tf("manualEntry")}
@@ -46,6 +48,10 @@ export function BarangMasukTabs({
         <Tabs.Trigger value="packing" className={triggerCls}>
           <FileSpreadsheet size={15} />
           {ti("tabImport")}
+        </Tabs.Trigger>
+        <Tabs.Trigger value="centr" className={triggerCls}>
+          <FileText size={15} />
+          {tcentr("tab")}
         </Tabs.Trigger>
       </Tabs.List>
 
@@ -59,6 +65,9 @@ export function BarangMasukTabs({
       </Tabs.Content>
       <Tabs.Content value="packing" className="focus:outline-none">
         <PackingListImport skus={skus} locations={locations} />
+      </Tabs.Content>
+      <Tabs.Content value="centr" className="focus:outline-none">
+        <CentrSoImport skus={skus} locations={locations} />
       </Tabs.Content>
     </Tabs.Root>
   );
