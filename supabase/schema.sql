@@ -1296,3 +1296,99 @@ DROP TRIGGER IF EXISTS trg_shop_audit_categories ON shop_categories;
 CREATE TRIGGER trg_shop_audit_categories
   AFTER INSERT OR UPDATE OR DELETE ON shop_categories
   FOR EACH ROW EXECUTE FUNCTION shop_audit_categories();
+
+-- ============================================================================
+-- MIGRATION (2026-07): Import CENTR Sales Order as bulk Goods In.
+-- CENTR (Health In Motion) supplier item codes (e.g. "2-HUOKB16-54484") differ
+-- from 20FIT SKUs, so a mapping table resolves them. The parsed SO is recorded
+-- as purchase_receipt goods-in; USD prices are kept in notes (Finance converts
+-- to IDR later). Applied to the live DB; kept here idempotently. The 36 seed
+-- rows are re-created from the live SKU list on a fresh provision.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS shop_centr_item_mappings (
+  mapping_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  centr_item_code TEXT NOT NULL UNIQUE,   -- e.g. "2-HUOKB16-54484"
+  centr_item_name TEXT,
+  variant_id      UUID REFERENCES shop_product_variants(variant_id),
+  notes           TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_centr_item_code ON shop_centr_item_mappings(centr_item_code);
+ALTER TABLE shop_centr_item_mappings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS shop_centr_mappings_read ON shop_centr_item_mappings;
+CREATE POLICY shop_centr_mappings_read ON shop_centr_item_mappings FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS shop_centr_mappings_write ON shop_centr_item_mappings;
+CREATE POLICY shop_centr_mappings_write ON shop_centr_item_mappings FOR ALL TO authenticated USING (true) WITH CHECK (true);
+GRANT SELECT, INSERT, UPDATE, DELETE ON shop_centr_item_mappings TO authenticated;
+
+-- Seed the known CENTR code → SKU mappings (only where the SKU exists).
+INSERT INTO shop_centr_item_mappings (centr_item_code, centr_item_name, variant_id)
+SELECT m.code, m.name, v.variant_id
+FROM (VALUES
+  ('54752 NMT.3.0','HYROX/ CENTR Non-Motorized Treadmills','20FIT-TM-001'),
+  ('2-HPS-54487','Centr x Hyrox Push Sled 50kg','20FIT-HPS-001'),
+  ('2-HBR-54473','Centr x Hyrox Battle Rope','20FIT-HBR-001'),
+  ('2-HTURF7-54683','Centr x Hyrox Perform Turf - Middle (2) Lanes 2m x 12.5m','20FIT-TURF-7'),
+  ('2-HBT-54497','Centr x Hyrox Wall Ball Target','20FIT-HBT-001'),
+  ('2-HUOKB8-54509','Centr x Hyrox Kettlebell 8kg','20FIT-KB-008'),
+  ('2-HUOKB12-54510','Centr x Hyrox Kettlebell 12kg','20FIT-KB-012'),
+  ('2-HUOKB16-54484','Centr x Hyrox Kettlebell 16kg','20FIT-KB-016'),
+  ('2-HUOKB20-54511','Centr x Hyrox Kettlebell 20kg','20FIT-KB-020'),
+  ('2-HUOKB24-54485','Centr x Hyrox Kettlebell 24kg','20FIT-KB-024'),
+  ('2-HUOKB28-54512','Centr x Hyrox Kettlebell 28kg','20FIT-KB-028'),
+  ('2-HUOKB32-54486','Centr x Hyrox Kettlebell 32kg','20FIT-KB-032'),
+  ('2-HSB10-54478','Centr x Hyrox Sandbag 10kg','20FIT-HSB10-001'),
+  ('2-HSB20-54479','Centr x Hyrox Sandbag 20kg','20FIT-HSB20-001'),
+  ('2-HSB30-54480','Centr x Hyrox Sandbag 30kg','20FIT-HSB30-001'),
+  ('2-HUBP5-54630','Centr x Hyrox Plate Weights (5kg)','20FIT-BP-005'),
+  ('2-HUBP10-54474','Hyrox CPU Bumper Plate, 10KG','20FIT-BP-010'),
+  ('2-HUBP15-54475','Hyrox CPU Bumper Plate, 15KG','20FIT-BP-015'),
+  ('2-HUBP20-54476','Hyrox CPU Bumper Plate, 20KG','20FIT-BP-020'),
+  ('2-HUBP25-54477','Centr x Hyrox Plate Weight 25kg','20FIT-BP-025'),
+  ('2-HUTP2-54560','Centr x Hyrox Top Plate Weight 2kg','20FIT-TP-002'),
+  ('2-HUTP3-54561','Centr x Hyrox Top Plate Weight 3kg','20FIT-TP-003'),
+  ('2-HWB2-54491','Centr x Hyrox Wall Ball 2kg','20FIT-HWB2-001'),
+  ('2-HWB4-54481','Centr x Hyrox Wall Ball 4kg','20FIT-HWB4-001'),
+  ('2-HWB6-54482','Centr x Hyrox Wall Ball 6kg','20FIT-HWB6-001'),
+  ('2-HWB9-54483','Centr x Hyrox Wall Ball 9kg','20FIT-HWB9-001'),
+  ('2-HWB12-54553','Centr x Hyrox Wall Ball 12kg','20FIT-HWB12-001'),
+  ('2-HUODB5-54513','Centr x Hyrox Dumbbell 5kg','20FIT-DB-005'),
+  ('2-HUODB7.5-54514','Centr x Hyrox Dumbbell 7.5kg','20FIT-DB-0075'),
+  ('2-HUODB10-54515','Centr x Hyrox Dumbbell 10kg','20FIT-DB-010'),
+  ('2-HUODB12.5-54516','Centr x Hyrox Dumbbell 12.5kg','20FIT-DB-0125'),
+  ('2-HUODB15-54517','Centr x Hyrox Dumbbell 15kg','20FIT-DB-015'),
+  ('2-HUODB17.5-54518','Centr x Hyrox Dumbbell 17.5kg','20FIT-DB-0175'),
+  ('2-HUODB20-54519','Centr x Hyrox Dumbbell 20kg','20FIT-DB-020'),
+  ('2-HUODB22.5-54520','Centr x Hyrox Dumbbell 22.5kg','20FIT-DB-0225'),
+  ('2-HUODB25-54521','Centr x Hyrox Dumbbell 25kg','20FIT-DB-025')
+) AS m(code, name, sku)
+JOIN shop_product_variants v ON v.sku_code = m.sku
+ON CONFLICT (centr_item_code) DO NOTHING;
+
+-- Atomic bulk goods-in from a CENTR Sales Order: purchase_receipt per item
+-- (good condition), SO number in reference_number, USD price kept in notes.
+-- unit_cost stays NULL — USD→IDR conversion is done later by Finance.
+CREATE OR REPLACE FUNCTION shop_import_centr_so(
+  p_location uuid, p_reference text, p_items jsonb
+) RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid;
+BEGIN
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    v_variant := (v_item->>'variant_id')::uuid;
+    IF v_variant IS NULL THEN CONTINUE; END IF;
+    PERFORM shop_record_movement(
+      v_variant, p_location, 'purchase_receipt',
+      (v_item->>'quantity')::int, NULL,
+      'centr_sales_order', NULL, NULL, NULL,
+      NULLIF(v_item->>'notes',''), false, 'good', NULL,
+      NULLIF(btrim(coalesce(p_reference,'')),''));
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END; $$;
+REVOKE ALL ON FUNCTION shop_import_centr_so(uuid,text,jsonb) FROM public, anon;
+GRANT EXECUTE ON FUNCTION shop_import_centr_so(uuid,text,jsonb) TO authenticated, service_role;
