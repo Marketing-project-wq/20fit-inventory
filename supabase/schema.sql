@@ -778,9 +778,9 @@ BEGIN
     IF p_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty; END IF;
   END IF;
   INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, unit_cost,
-    reference_type, sales_channel, marketplace_order_number, reason_code, notes, item_condition, photo_url, reference_number)
+    reference_type, sales_channel, marketplace_order_number, reason_code, notes, item_condition, photo_url, reference_number, performed_by)
   VALUES (p_variant, p_location, p_type, p_qty, p_unit_cost, p_reference_type, p_sales_channel,
-    p_marketplace_order, p_reason, p_notes, p_item_condition, p_photo_url, p_reference_number)
+    p_marketplace_order, p_reason, p_notes, p_item_condition, p_photo_url, p_reference_number, auth.uid())
   RETURNING movement_id INTO v_movement;
   PERFORM shop_recompute_level(p_variant, p_location);
   RETURN v_movement;
@@ -950,11 +950,11 @@ BEGIN
   INSERT INTO shop_stock_movements(
     variant_id, location_id, movement_type, quantity, unit_cost,
     reference_type, reference_id, reason_code, notes,
-    item_condition, photo_url, warranty_claim_number)
+    item_condition, photo_url, warranty_claim_number, performed_by)
   VALUES (
     p_variant, p_location, 'warranty_out', p_qty, p_unit_cost,
     'warranty_claim', v_claim_id, p_reason, p_notes,
-    'damaged', p_photo_url, v_claim_number)
+    'damaged', p_photo_url, v_claim_number, auth.uid())
   RETURNING movement_id INTO v_movement;
 
   PERFORM shop_recompute_level(p_variant, p_location);
@@ -966,6 +966,10 @@ GRANT EXECUTE ON FUNCTION shop_record_warranty_out(uuid,uuid,int,text,text,text,
 -- shop_record_movement now counts warranty_out as outbound too (the dedicated
 -- recorder above is the real path; this keeps the generic recorder's stock check
 -- correct if warranty_out is ever routed through it). Signature unchanged.
+-- MIGRATION (2026-07 audit fix M2): also stamps performed_by = auth.uid() on the
+-- ledger row so every new movement records WHO made it (NULL under service-role
+-- / system calls — performed_by has no FK, so that is safe). Transfers and CENTR
+-- imports go through this function, so they inherit the actor automatically.
 CREATE OR REPLACE FUNCTION shop_record_movement(
   p_variant uuid, p_location uuid, p_type text, p_qty int,
   p_unit_cost numeric DEFAULT NULL, p_reference_type text DEFAULT 'manual',
@@ -985,9 +989,9 @@ BEGIN
     IF p_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty; END IF;
   END IF;
   INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, unit_cost,
-    reference_type, sales_channel, marketplace_order_number, reason_code, notes, item_condition, photo_url, reference_number)
+    reference_type, sales_channel, marketplace_order_number, reason_code, notes, item_condition, photo_url, reference_number, performed_by)
   VALUES (p_variant, p_location, p_type, p_qty, p_unit_cost, p_reference_type, p_sales_channel,
-    p_marketplace_order, p_reason, p_notes, p_item_condition, p_photo_url, p_reference_number)
+    p_marketplace_order, p_reason, p_notes, p_item_condition, p_photo_url, p_reference_number, auth.uid())
   RETURNING movement_id INTO v_movement;
   PERFORM shop_recompute_level(p_variant, p_location);
   RETURN v_movement;

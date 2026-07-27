@@ -533,6 +533,7 @@
     "generateNeedCategory": "Select a category before generating a SKU.",
     "generateNeedName": "Enter the product name before generating a SKU.",
     "generateReady": "SKU ready — you can still edit it manually.",
+    "reorderEmptyHint": "Not set — low-stock alerts won't appear for this SKU.",
     "generateNoteFallback": "Category \"{category}\" isn't in the code list. Code \"{code}\" was auto-generated — review & edit if needed.",
     "generateNoteDuplicate": "SKU {sku} already exists. A sequential number was appended.",
     "addLocation": "Add Location",
