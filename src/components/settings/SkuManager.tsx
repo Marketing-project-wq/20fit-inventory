@@ -92,7 +92,15 @@ function SkuRow({ sku }: { sku: SkuAdmin }) {
           onChange={(e) => setReorder(e.target.value)}
           type="number"
           min={0}
-          className={cn(inputCls, "w-20 py-1.5 text-right font-mono")}
+          placeholder="—"
+          title={reorder === "" ? t("reorderEmptyHint") : undefined}
+          className={cn(
+            inputCls,
+            "w-20 py-1.5 text-right font-mono",
+            // Empty reorder point = no low-stock alert for this SKU: flag it amber.
+            reorder === "" &&
+              "border-warning bg-warning/10 text-warning placeholder:text-warning/60",
+          )}
         />
       </td>
       <td className="px-3 py-2 text-center">

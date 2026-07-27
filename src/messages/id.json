@@ -533,6 +533,7 @@
     "generateNeedCategory": "Pilih kategori dulu sebelum generate SKU.",
     "generateNeedName": "Isi nama produk dulu sebelum generate SKU.",
     "generateReady": "SKU siap dipakai — bisa diedit manual jika perlu.",
+    "reorderEmptyHint": "Belum diisi — alert stok menipis tidak akan muncul untuk SKU ini.",
     "generateNoteFallback": "Kategori \"{category}\" belum ada di daftar kode. Kode \"{code}\" dibuat otomatis — periksa & edit bila perlu.",
     "generateNoteDuplicate": "SKU {sku} sudah ada. Nomor urut ditambahkan otomatis.",
     "addLocation": "Tambah Lokasi",
