@@ -476,6 +476,8 @@
     "notConfigured": "Autentikasi belum dikonfigurasi di server.",
     "invalidInput": "Isian tidak valid.",
     "forgotPassword": "Lupa kata sandi?",
+    "showPassword": "Lihat kata sandi",
+    "hidePassword": "Sembunyikan kata sandi",
     "backToLogin": "Kembali ke halaman masuk",
     "forgotTitle": "Reset Kata Sandi",
     "forgotSubtitle": "Masukkan email akun Anda. Kami akan mengirim tautan untuk mengatur ulang kata sandi.",

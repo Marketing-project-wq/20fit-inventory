@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Eye, EyeOff } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { signIn, type ActionState } from "@/lib/actions";
 import { inputCls, Field, Alert } from "@/components/forms/ui";
+import { cn } from "@/lib/utils";
 import { AuthShell } from "./AuthShell";
 
 export function LoginForm({ locale, next }: { locale: string; next: string }) {
@@ -14,6 +16,7 @@ export function LoginForm({ locale, next }: { locale: string; next: string }) {
     signIn,
     null,
   );
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <AuthShell subtitle={t("subtitle")}>
@@ -43,13 +46,25 @@ export function LoginForm({ locale, next }: { locale: string; next: string }) {
 
         <div>
           <Field label={t("password")}>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              className={inputCls}
-            />
+            <div className="relative">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                required
+                className={cn(inputCls, "pr-11")}
+              />
+              {/* type="button" so tapping the eye toggles visibility instead of
+                  submitting the form. */}
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? t("hidePassword") : t("showPassword")}
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted transition-colors hover:text-fg"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </Field>
           <div className="mt-1.5 text-right">
             <Link
