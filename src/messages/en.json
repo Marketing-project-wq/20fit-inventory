@@ -476,6 +476,8 @@
     "notConfigured": "Authentication is not configured on the server.",
     "invalidInput": "Invalid input.",
     "forgotPassword": "Forgot password?",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "backToLogin": "Back to sign in",
     "forgotTitle": "Reset Password",
     "forgotSubtitle": "Enter your account email and we'll send you a link to reset your password.",
