@@ -17,6 +17,7 @@
     "@radix-ui/react-toast": "^1.2.18",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "html5-qrcode": "^2.3.8",
@@ -31,12 +32,14 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.80.0",
     "recharts": "^3.9.1",
+    "resend": "^6.18.1",
     "tailwind-merge": "^3.6.0",
     "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/papaparse": "^5.5.2",
     "@types/qrcode": "^1.5.6",
