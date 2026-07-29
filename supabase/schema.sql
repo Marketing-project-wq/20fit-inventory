@@ -1396,3 +1396,42 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION shop_import_centr_so(uuid,text,jsonb) FROM public, anon;
 GRANT EXECUTE ON FUNCTION shop_import_centr_so(uuid,text,jsonb) TO authenticated, service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-07): OTP password reset (branded, provider-independent).
+-- Replaces the Supabase magic-link recovery email (which carried another app's
+-- branding in this shared project) with a 6-digit code the app emails itself.
+-- Applied to the live DB; kept here idempotently.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS shop_password_reset_otps (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       TEXT NOT NULL,
+  code_hash   TEXT NOT NULL,            -- bcrypt hash of the 6-digit code (never plaintext)
+  used        BOOLEAN NOT NULL DEFAULT false,
+  expires_at  TIMESTAMPTZ NOT NULL,     -- now() + 10 min
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  ip_address  TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_otp_email ON shop_password_reset_otps(email, used, expires_at);
+
+-- Service-role only: RLS on + zero policies denies anon/authenticated entirely;
+-- the server actions reach it with the service-role key (which bypasses RLS).
+ALTER TABLE shop_password_reset_otps ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION shop_cleanup_expired_otps() RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  DELETE FROM shop_password_reset_otps WHERE expires_at < now() - INTERVAL '1 hour';
+$$;
+REVOKE ALL ON FUNCTION shop_cleanup_expired_otps() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION shop_cleanup_expired_otps() TO service_role;
+
+-- auth.admin.listUsers() only returns the first page, so the OTP flow resolves
+-- the target account by email through this indexed lookup. Service-role only.
+CREATE OR REPLACE FUNCTION shop_find_auth_user_by_email(p_email text) RETURNS uuid
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT id FROM auth.users WHERE lower(email) = lower(btrim(p_email)) LIMIT 1;
+$$;
+REVOKE ALL ON FUNCTION shop_find_auth_user_by_email(text) FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION shop_find_auth_user_by_email(text) TO service_role;
