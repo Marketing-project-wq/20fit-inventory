@@ -47,8 +47,8 @@ npm run dev            # http://localhost:3000
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon/public key (aman untuk browser) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key — **server-only**, set di env Vercel, jangan di client |
 | `NEXT_PUBLIC_APP_URL` | Base URL aplikasi |
-| `RESEND_API_KEY` | API key Resend untuk email transaksional (OTP reset kata sandi). Tanpa ini, alur OTP tetap berjalan tapi kode dicatat di log server, bukan dikirim via email (fallback dev). |
-| `RESEND_FROM` | *(opsional)* Alamat pengirim, mis. `"20FIT Shop <noreply@20fit.id>"`. Default ke nilai tersebut bila kosong. Domain pengirim **harus terverifikasi di dashboard Resend**. |
+| `MAILTRAP_API_TOKEN` | Token API Mailtrap untuk email transaksional (OTP reset kata sandi). Tanpa ini, alur OTP tetap berjalan tapi kode dicatat di log server, bukan dikirim via email (fallback dev). |
+| `MAILTRAP_FROM` | *(opsional)* Alamat pengirim, mis. `noreply@20fit.id`. Default ke alamat tersebut bila kosong. Domain pengirim **harus terverifikasi di dashboard Mailtrap**. |
 
 ## Deploy ke Vercel
 
