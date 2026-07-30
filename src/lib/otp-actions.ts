@@ -79,11 +79,20 @@ export async function requestPasswordOtp(
       expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       ip_address: await clientIp(),
     });
-    await sendEmail({
+    const { sent } = await sendEmail({
       to: email,
       subject: otpEmailSubject(code, locale),
       html: buildOtpEmailHtml({ code, email, locale }),
     });
+    // A stored code that never reached the user is a dead end: don't advance
+    // the UI to the code-entry step. sendEmail already logged the provider
+    // reason; add the flow context here without leaking it to the client.
+    if (!sent) {
+      console.error(
+        `[otp] requestPasswordOtp: email delivery failed for ${email} — code not sent.`,
+      );
+      return { ok: false, error: "email_send_failed" };
+    }
   }
 
   return { ok: true, step: "verify", message: "code_sent" };

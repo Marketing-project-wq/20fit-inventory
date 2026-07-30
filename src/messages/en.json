@@ -497,6 +497,7 @@
     "otpTooMany": "Too many attempts. Request a new code.",
     "otpWrong": "Wrong code. {count} attempts left.",
     "otpInvalidFormat": "Enter the 6-digit code.",
+    "emailSendFailed": "We couldn't send your code right now. Please try again shortly.",
     "updateFailed": "Couldn't change the password. Try again.",
     "emailInvalid": "Enter a valid email address.",
     "resetTitle": "Set New Password",
