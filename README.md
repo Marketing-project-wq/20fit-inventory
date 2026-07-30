@@ -17,7 +17,7 @@ Dibangun dari **PRD v1.4**.
 | Styling   | Tailwind CSS v4 |
 | i18n      | next-intl (ID/EN, toggle di UI) |
 | Lainnya   | qrcode + html5-qrcode (QR), xlsx + papaparse (import), recharts (chart), react-hook-form + zod (form), lucide-react (ikon) |
-| Deploy    | Vercel |
+| Deploy    | Railway (Nixpacks) |
 
 ## Setup
 
@@ -45,16 +45,18 @@ npm run dev            # http://localhost:3000
 |----------|-----------|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL project Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon/public key (aman untuk browser) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role key — **server-only**, set di env Vercel, jangan di client |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key — **server-only**, set di env Railway, jangan di client |
 | `NEXT_PUBLIC_APP_URL` | Base URL aplikasi |
 | `MAILTRAP_API_TOKEN` | Token API Mailtrap untuk email transaksional (OTP reset kata sandi). Tanpa ini, alur OTP tetap berjalan tapi kode dicatat di log server, bukan dikirim via email (fallback dev). |
 | `MAILTRAP_FROM` | *(opsional)* Alamat pengirim, mis. `noreply@20fit.id`. Default ke alamat tersebut bila kosong. Domain pengirim **harus terverifikasi di dashboard Mailtrap**. |
 
-## Deploy ke Vercel
+## Deploy ke Railway
 
-1. Import repo ini ke Vercel.
-2. Tambahkan environment variables di atas di project settings Vercel.
-3. Deploy — Vercel otomatis mendeteksi Next.js.
+Aplikasi di-deploy ke **Railway** (service `20fit-shop-inventory`, domain `shopinventory.20fit.id`).
+
+1. Railway terhubung ke repo GitHub ini dan **auto-deploy** setiap kali branch yang terhubung menerima commit baru.
+2. Build memakai **Nixpacks**, yang mendeteksi Next.js secara otomatis — jadi **tidak perlu** `railway.json`, `nixpacks.toml`, atau `Procfile`. Ketiadaan file-file tersebut memang disengaja (deteksi standar Next.js), bukan konfigurasi yang hilang.
+3. Environment variables diset di **Railway dashboard** (Service → Variables), bukan di file repo — mis. `SUPABASE_SERVICE_ROLE_KEY`, `MAILTRAP_API_TOKEN`, `MAILTRAP_FROM`, dan variabel Supabase/publik lain sesuai tabel di atas.
 
 ## Status pembangunan (bertahap)
 
