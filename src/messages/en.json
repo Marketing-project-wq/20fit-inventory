@@ -239,7 +239,8 @@
     "returnInDamaged": "Return In (Damaged)",
     "damageIn": "Damaged In",
     "damageOut": "Damaged Out",
-    "warrantyOut": "Warranty Out"
+    "warrantyOut": "Warranty Out",
+    "filterByUser": "Filter by user"
   },
   "access": {
     "checkIn": "Check In",
@@ -392,6 +393,7 @@
     "location": "Location",
     "channel": "Channel",
     "notes": "Notes",
+    "performedBy": "By",
     "reserved": "Reserved",
     "available": "Available",
     "all": "All",

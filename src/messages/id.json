@@ -239,7 +239,8 @@
     "returnInDamaged": "Retur Masuk (Rusak)",
     "damageIn": "Rusak Masuk",
     "damageOut": "Rusak Keluar",
-    "warrantyOut": "Garansi Keluar"
+    "warrantyOut": "Garansi Keluar",
+    "filterByUser": "Filter berdasarkan pengguna"
   },
   "access": {
     "checkIn": "Check In",
@@ -392,6 +393,7 @@
     "location": "Lokasi",
     "channel": "Kanal",
     "notes": "Catatan",
+    "performedBy": "Oleh",
     "reserved": "Dipesan",
     "available": "Tersedia",
     "all": "Semua",

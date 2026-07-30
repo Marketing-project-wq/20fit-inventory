@@ -2,13 +2,21 @@ import { getTranslations } from "next-intl/server";
 import { Info } from "lucide-react";
 import { getMovements } from "@/lib/data";
 import { MovementTable } from "@/components/movements/MovementTable";
+import { MovementUserFilter } from "@/components/movements/MovementUserFilter";
 
 export const dynamic = "force-dynamic";
 
-export default async function MutasiPage() {
+export default async function MutasiPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ user?: string }>;
+}) {
+  const sp = await searchParams;
+  const userFilter = sp.user?.trim() || "";
+
   const t = await getTranslations("nav");
   const td = await getTranslations("dashboard");
-  const movements = await getMovements(150);
+  const movements = await getMovements(150, { user: userFilter || undefined });
 
   return (
     <div className="space-y-6">
@@ -25,7 +33,10 @@ export default async function MutasiPage() {
           <p className="text-sm text-fg/90">{td("connectNotice")}</p>
         </div>
       ) : (
-        <MovementTable movements={movements} />
+        <>
+          <MovementUserFilter value={userFilter} />
+          <MovementTable movements={movements} />
+        </>
       )}
     </div>
   );

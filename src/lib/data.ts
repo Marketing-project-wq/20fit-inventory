@@ -41,6 +41,8 @@ export type Movement = {
   reference_type: string | null;
   reason_code: string | null;
   notes: string | null;
+  performed_by: string | null;
+  performed_by_email: string | null;
 };
 
 export type Snapshot = {
@@ -173,19 +175,49 @@ export async function getSnapshot(): Promise<Snapshot | null> {
   };
 }
 
-/** Recent stock movements (ledger), newest first. */
-export async function getMovements(limit = 100): Promise<Movement[] | null> {
+type MovementActor = { user_id: string; email: string | null };
+
+/**
+ * Recent stock movements (ledger), newest first.
+ *
+ * `opts.user` is a server-side, URL-driven filter on the performing user's
+ * email (substring). The performer is `shop_stock_movements.performed_by`
+ * (an auth user id); since `shop_staff.user_id` is unpopulated, the display
+ * name/email is resolved via `shop_movement_actors()` (a SECURITY DEFINER
+ * helper scoped to users who have actually performed a movement).
+ */
+export async function getMovements(
+  limit = 100,
+  opts?: { user?: string },
+): Promise<Movement[] | null> {
   const sb = await createSupabaseServerClient();
   if (!sb) return null;
 
+  const { data: actorRows } = await sb.rpc("shop_movement_actors");
+  const actors = (actorRows ?? []) as MovementActor[];
+  const emailById = new Map(actors.map((a) => [a.user_id, a.email ?? ""]));
+
+  // Resolve the optional user filter to matching performer ids.
+  const userQuery = opts?.user?.trim().toLowerCase();
+  let filterIds: string[] | null = null;
+  if (userQuery) {
+    filterIds = actors
+      .filter((a) => (a.email ?? "").toLowerCase().includes(userQuery))
+      .map((a) => a.user_id);
+    if (filterIds.length === 0) return []; // no actor matches → empty result
+  }
+
+  let movementQuery = sb
+    .from("shop_stock_movements")
+    .select(
+      "movement_id,performed_at,movement_type,variant_id,quantity,unit_cost,sales_channel,reference_type,reason_code,notes,performed_by",
+    )
+    .order("performed_at", { ascending: false })
+    .limit(limit);
+  if (filterIds) movementQuery = movementQuery.in("performed_by", filterIds);
+
   const [movements, variants, products] = await Promise.all([
-    sb
-      .from("shop_stock_movements")
-      .select(
-        "movement_id,performed_at,movement_type,variant_id,quantity,unit_cost,sales_channel,reference_type,reason_code,notes",
-      )
-      .order("performed_at", { ascending: false })
-      .limit(limit),
+    movementQuery,
     sb.from("shop_product_variants").select("variant_id,product_id,sku_code"),
     sb.from("shop_products").select("product_id,name"),
   ]);
@@ -209,6 +241,10 @@ export async function getMovements(limit = 100): Promise<Movement[] | null> {
       reference_type: m.reference_type,
       reason_code: m.reason_code,
       notes: m.notes,
+      performed_by: m.performed_by ?? null,
+      performed_by_email: m.performed_by
+        ? emailById.get(m.performed_by) || null
+        : null,
     };
   });
 }
