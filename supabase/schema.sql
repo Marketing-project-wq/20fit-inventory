@@ -1463,3 +1463,119 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
 $$;
 REVOKE ALL ON FUNCTION shop_cleanup_expired_otps() FROM public, anon, authenticated;
 GRANT EXECUTE ON FUNCTION shop_cleanup_expired_otps() TO service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-07): Stamp performed_by on the 3 ledger paths that left it
+-- NULL, so the audit trail records "who" for every stock movement. These
+-- SECURITY DEFINER functions run in the same context as shop_record_movement
+-- (which already populates performed_by = auth.uid()). Applied to the live DB;
+-- kept here idempotently. NOTE: these definitions reflect the live functions,
+-- which have drifted from the original defs earlier in this file (extra params
+-- item_condition/photo_url/sales_staff_id/dw_name, condition = 'good', etc.);
+-- the CREATE OR REPLACE statements below supersede those.
+-- ============================================================================
+
+-- Transfer: performed_by on BOTH transfer_out and transfer_in (sales_staff_id /
+-- dw_name retained — both identities kept).
+CREATE OR REPLACE FUNCTION public.shop_record_transfer(
+  p_variant uuid, p_from uuid, p_to uuid, p_qty integer,
+  p_notes text DEFAULT NULL::text, p_allow_backorder boolean DEFAULT false,
+  p_sales_staff_id uuid DEFAULT NULL::uuid, p_dw_name text DEFAULT NULL::text,
+  p_photo_url text DEFAULT NULL::text)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE v_available int; v_ref uuid := gen_random_uuid();
+BEGIN
+  IF p_qty IS NULL OR p_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+  IF p_from = p_to THEN RAISE EXCEPTION 'same_location'; END IF;
+  IF NOT p_allow_backorder THEN
+    SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+    FROM shop_stock_levels WHERE variant_id = p_variant AND location_id = p_from AND condition = 'good' FOR UPDATE;
+    v_available := COALESCE(v_available, 0);
+    IF p_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: available % < requested %', v_available, p_qty; END IF;
+  END IF;
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes, sales_staff_id, dw_name, photo_url, performed_by)
+  VALUES (p_variant, p_from, p_to, 'transfer_out', p_qty, 'transfer_order', v_ref, p_notes, p_sales_staff_id, p_dw_name, p_photo_url, auth.uid());
+  INSERT INTO shop_stock_movements(variant_id, location_id, related_location_id, movement_type, quantity, reference_type, reference_id, notes, sales_staff_id, dw_name, photo_url, performed_by)
+  VALUES (p_variant, p_to, p_from, 'transfer_in', p_qty, 'transfer_order', v_ref, p_notes, p_sales_staff_id, p_dw_name, p_photo_url, auth.uid());
+  PERFORM shop_recompute_level(p_variant, p_from);
+  PERFORM shop_recompute_level(p_variant, p_to);
+  RETURN v_ref;
+END; $function$;
+
+-- Xero import: performed_by on the direct INSERT.
+CREATE OR REPLACE FUNCTION public.shop_import_xero_sale(
+  p_location uuid, p_reference text, p_customer text, p_items jsonb, p_allow_backorder boolean DEFAULT false)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid; v_qty int; v_desc text; v_available int; v_note text;
+BEGIN
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+  v_note := NULLIF(btrim(coalesce(p_customer, '')), '');
+  v_note := btrim(concat_ws(' — ', v_note, 'Import dari Xero'));
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    v_variant := (v_item->>'variant_id')::uuid; v_qty := (v_item->>'quantity')::int; v_desc := v_item->>'description';
+    IF v_variant IS NULL THEN RAISE EXCEPTION 'invalid_variant'; END IF;
+    IF v_qty IS NULL OR v_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+    IF NOT p_allow_backorder THEN
+      SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+      FROM shop_stock_levels WHERE variant_id = v_variant AND location_id = p_location AND condition = 'good' FOR UPDATE;
+      v_available := COALESCE(v_available, 0);
+      IF v_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: "%" available % < requested %', coalesce(v_desc, ''), v_available, v_qty; END IF;
+    END IF;
+    INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, reference_type, reference_number, sales_channel, notes, performed_by)
+    VALUES (v_variant, p_location, 'sale', v_qty, 'xero_quotation', NULLIF(btrim(coalesce(p_reference,'')), ''), 'b2b_direct', v_note, auth.uid());
+    PERFORM shop_recompute_level(v_variant, p_location);
+    IF v_desc IS NOT NULL AND length(btrim(v_desc)) > 0 THEN
+      INSERT INTO shop_xero_product_mappings(xero_description, variant_id) VALUES (btrim(v_desc), v_variant)
+      ON CONFLICT (xero_description) DO UPDATE SET variant_id = EXCLUDED.variant_id, updated_at = NOW();
+    END IF;
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END; $function$;
+
+-- Opname apply: performed_by on the adjustment ledger rows (session approved_by
+-- unchanged).
+CREATE OR REPLACE FUNCTION public.shop_apply_opname(p_session uuid, p_user uuid DEFAULT NULL::uuid)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE r record; v_loc uuid; v_count int := 0; v_diff int; v_type text;
+BEGIN
+  SELECT location_id INTO v_loc FROM shop_stock_opname_sessions WHERE session_id = p_session FOR UPDATE;
+  IF v_loc IS NULL THEN RAISE EXCEPTION 'session_not_found'; END IF;
+  FOR r IN SELECT line_id, variant_id, expected_qty, counted_qty
+           FROM shop_stock_opname_lines WHERE session_id = p_session AND counted_qty IS NOT NULL
+  LOOP
+    v_diff := r.counted_qty - r.expected_qty;
+    IF v_diff <> 0 THEN
+      v_type := CASE WHEN v_diff > 0 THEN 'adjustment_in' ELSE 'adjustment_out' END;
+      INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, reference_type, reference_id, reason_code, notes, performed_by)
+      VALUES (r.variant_id, v_loc, v_type, abs(v_diff), 'adjustment', p_session, 'stock_opname', 'Penyesuaian hasil stock opname', auth.uid());
+      PERFORM shop_recompute_level(r.variant_id, v_loc);
+      v_count := v_count + 1;
+    END IF;
+    UPDATE shop_stock_opname_lines SET is_approved = true WHERE line_id = r.line_id;
+  END LOOP;
+  UPDATE shop_stock_opname_sessions SET status = 'completed', completed_at = NOW(), approved_by = p_user WHERE session_id = p_session;
+  RETURN v_count;
+END; $function$;
+
+-- Actor lookup for the Mutasi "By" column + user filter. The authed PostgREST
+-- client cannot read auth.users, so expose a minimal SECURITY DEFINER helper —
+-- scoped to ONLY users who have performed a movement (this is a SHARED project
+-- whose auth.users holds the whole 20FIT ecosystem, so we must not expose all of
+-- it). shop_staff.user_id is unpopulated, so it cannot be used for this.
+CREATE OR REPLACE FUNCTION public.shop_movement_actors()
+RETURNS TABLE(user_id uuid, email text)
+LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+  SELECT u.id, u.email
+  FROM auth.users u
+  WHERE u.id IN (
+    SELECT DISTINCT performed_by FROM shop_stock_movements WHERE performed_by IS NOT NULL
+  )
+$function$;
+REVOKE ALL ON FUNCTION public.shop_movement_actors() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.shop_movement_actors() TO authenticated, service_role;

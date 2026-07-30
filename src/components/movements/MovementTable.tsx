@@ -117,6 +117,9 @@ export function MovementTable({ movements }: { movements: Movement[] }) {
               <th className="hidden px-4 py-3 font-medium lg:table-cell">
                 {tc("notes")}
               </th>
+              <th className="hidden px-4 py-3 font-medium lg:table-cell">
+                {tc("performedBy")}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -148,6 +151,9 @@ export function MovementTable({ movements }: { movements: Movement[] }) {
                 </td>
                 <td className="hidden max-w-[220px] truncate px-4 py-3 text-xs text-dim lg:table-cell">
                   {m.notes ?? "—"}
+                </td>
+                <td className="hidden px-4 py-3 text-xs text-muted lg:table-cell">
+                  {m.performed_by_email ?? "—"}
                 </td>
               </tr>
             ))}
