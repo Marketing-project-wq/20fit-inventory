@@ -206,6 +206,7 @@
     "err_parse_failed": "Could not read the PDF. Make sure it's a CENTR Sales Order.",
     "err_no_items": "No items could be read from this SO.",
     "err_invalid_input": "Invalid data.",
+    "err_already_imported": "This SO was already imported on {date}.",
     "err_unauthorized": "Session expired. Please sign in again.",
     "err_not_configured": "Database is not connected.",
     "err_generic": "Something went wrong. Please try again."
@@ -368,6 +369,7 @@
     "errInsufficientStock": "Not enough stock for one of the items. Enable 'allow negative stock' or reduce the quantity.",
     "errNothingSelected": "No rows with a SKU to record.",
     "errNoLocation": "Choose a location.",
+    "errAlreadyImported": "This order was already imported on {date}.",
     "errGeneric": "Something went wrong. Please try again."
   },
   "common": {

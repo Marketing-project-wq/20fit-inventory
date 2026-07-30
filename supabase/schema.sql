@@ -1579,3 +1579,95 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION public.shop_movement_actors() FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.shop_movement_actors() TO authenticated, service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-07): Duplicate-prevention for the referenced import paths.
+-- Re-importing the same quotation/SO reference silently inserted a second
+-- identical batch (real stock double-decrement). Each import now takes a
+-- transaction advisory lock on the reference (race-safe without a schema
+-- constraint) and raises duplicate_reference — including the original import
+-- date — if any row already exists for that reference (scoped by
+-- reference_type). Skipped entirely when no reference is provided (deliberate
+-- scope limitation). Applied to the live DB; kept here idempotently.
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.shop_import_xero_sale(
+  p_location uuid, p_reference text, p_customer text, p_items jsonb, p_allow_backorder boolean DEFAULT false)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid; v_qty int; v_desc text; v_available int; v_note text;
+  v_ref text := NULLIF(btrim(coalesce(p_reference, '')), '');
+  v_dup_date date;
+BEGIN
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+
+  -- Duplicate-prevention (only when a reference is present).
+  IF v_ref IS NOT NULL THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended('xero_import:' || v_ref, 0));
+    SELECT min(performed_at)::date INTO v_dup_date
+    FROM shop_stock_movements
+    WHERE reference_type = 'xero_quotation' AND reference_number = v_ref;
+    IF v_dup_date IS NOT NULL THEN
+      RAISE EXCEPTION 'duplicate_reference: %', v_dup_date;
+    END IF;
+  END IF;
+
+  v_note := NULLIF(btrim(coalesce(p_customer, '')), '');
+  v_note := btrim(concat_ws(' — ', v_note, 'Import dari Xero'));
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    v_variant := (v_item->>'variant_id')::uuid; v_qty := (v_item->>'quantity')::int; v_desc := v_item->>'description';
+    IF v_variant IS NULL THEN RAISE EXCEPTION 'invalid_variant'; END IF;
+    IF v_qty IS NULL OR v_qty <= 0 THEN RAISE EXCEPTION 'invalid_quantity'; END IF;
+    IF NOT p_allow_backorder THEN
+      SELECT (quantity_on_hand - quantity_reserved) INTO v_available
+      FROM shop_stock_levels WHERE variant_id = v_variant AND location_id = p_location AND condition = 'good' FOR UPDATE;
+      v_available := COALESCE(v_available, 0);
+      IF v_qty > v_available THEN RAISE EXCEPTION 'insufficient_stock: "%" available % < requested %', coalesce(v_desc, ''), v_available, v_qty; END IF;
+    END IF;
+    INSERT INTO shop_stock_movements(variant_id, location_id, movement_type, quantity, reference_type, reference_number, sales_channel, notes, performed_by)
+    VALUES (v_variant, p_location, 'sale', v_qty, 'xero_quotation', v_ref, 'b2b_direct', v_note, auth.uid());
+    PERFORM shop_recompute_level(v_variant, p_location);
+    IF v_desc IS NOT NULL AND length(btrim(v_desc)) > 0 THEN
+      INSERT INTO shop_xero_product_mappings(xero_description, variant_id) VALUES (btrim(v_desc), v_variant)
+      ON CONFLICT (xero_description) DO UPDATE SET variant_id = EXCLUDED.variant_id, updated_at = NOW();
+    END IF;
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END; $function$;
+
+CREATE OR REPLACE FUNCTION public.shop_import_centr_so(p_location uuid, p_reference text, p_items jsonb)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+DECLARE v_item jsonb; v_count int := 0; v_variant uuid;
+  v_ref text := NULLIF(btrim(coalesce(p_reference, '')), '');
+  v_dup_date date;
+BEGIN
+  IF p_location IS NULL THEN RAISE EXCEPTION 'invalid_location'; END IF;
+  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN RAISE EXCEPTION 'invalid_items'; END IF;
+
+  -- Duplicate-prevention (only when a reference is present).
+  IF v_ref IS NOT NULL THEN
+    PERFORM pg_advisory_xact_lock(hashtextextended('centr_import:' || v_ref, 0));
+    SELECT min(performed_at)::date INTO v_dup_date
+    FROM shop_stock_movements
+    WHERE reference_type = 'centr_sales_order' AND reference_number = v_ref;
+    IF v_dup_date IS NOT NULL THEN
+      RAISE EXCEPTION 'duplicate_reference: %', v_dup_date;
+    END IF;
+  END IF;
+
+  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    v_variant := (v_item->>'variant_id')::uuid;
+    IF v_variant IS NULL THEN CONTINUE; END IF;
+    PERFORM shop_record_movement(
+      v_variant, p_location, 'purchase_receipt',
+      (v_item->>'quantity')::int, NULL,
+      'centr_sales_order', NULL, NULL, NULL,
+      NULLIF(v_item->>'notes',''), false, 'good', NULL,
+      v_ref);
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END; $function$;

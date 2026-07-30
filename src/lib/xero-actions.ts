@@ -24,7 +24,12 @@ export type XeroParseResult =
     }
   | { ok: false; error: string };
 
-export type XeroImportResult = { ok: boolean; count?: number; error?: string };
+export type XeroImportResult = {
+  ok: boolean;
+  count?: number;
+  error?: string;
+  detail?: string;
+};
 
 async function loadSkusAndMappings(sb: SupabaseClient) {
   const [variants, products, mappings] = await Promise.all([
@@ -158,6 +163,12 @@ export async function importXeroSale(input: unknown): Promise<XeroImportResult> 
   if (error) {
     if (error.message.includes("insufficient_stock"))
       return { ok: false, error: "insufficient_stock" };
+    if (error.message.includes("duplicate_reference"))
+      return {
+        ok: false,
+        error: "already_imported",
+        detail: error.message.split("duplicate_reference:")[1]?.trim() || undefined,
+      };
     return { ok: false, error: error.message };
   }
 

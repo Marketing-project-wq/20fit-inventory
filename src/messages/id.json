@@ -206,6 +206,7 @@
     "err_parse_failed": "Gagal membaca PDF. Pastikan ini Sales Order CENTR.",
     "err_no_items": "Tidak ada item yang terbaca dari SO ini.",
     "err_invalid_input": "Data tidak valid.",
+    "err_already_imported": "SO ini sudah pernah diimpor pada {date}.",
     "err_unauthorized": "Sesi berakhir. Silakan masuk kembali.",
     "err_not_configured": "Database belum terhubung.",
     "err_generic": "Terjadi kesalahan. Coba lagi."
@@ -368,6 +369,7 @@
     "errInsufficientStock": "Stok tidak cukup untuk salah satu item. Aktifkan 'izinkan stok minus' atau kurangi jumlah.",
     "errNothingSelected": "Tidak ada baris dengan SKU untuk dicatat.",
     "errNoLocation": "Pilih lokasi.",
+    "errAlreadyImported": "Order ini sudah pernah diimpor pada {date}.",
     "errGeneric": "Terjadi kesalahan. Coba lagi."
   },
   "common": {

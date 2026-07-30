@@ -114,7 +114,12 @@ const importSchema = z.object({
     .min(1),
 });
 
-export type CentrImportResult = { ok: boolean; count?: number; error?: string };
+export type CentrImportResult = {
+  ok: boolean;
+  count?: number;
+  error?: string;
+  detail?: string;
+};
 
 export async function importCentrSo(input: unknown): Promise<CentrImportResult> {
   const { sb, error: authErr } = await requireUser();
@@ -132,7 +137,15 @@ export async function importCentrSo(input: unknown): Promise<CentrImportResult> 
       notes: `SO ${d.so_number ?? "-"} · ${i.centr_item_code} · $${i.unit_price_usd.toFixed(2)}/unit`,
     })),
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    if (error.message.includes("duplicate_reference"))
+      return {
+        ok: false,
+        error: "already_imported",
+        detail: error.message.split("duplicate_reference:")[1]?.trim() || undefined,
+      };
+    return { ok: false, error: error.message };
+  }
   revalidatePath("/", "layout");
   return { ok: true, count: typeof data === "number" ? data : d.items.length };
 }

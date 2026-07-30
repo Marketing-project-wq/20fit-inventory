@@ -38,6 +38,7 @@ const ERROR_KEYS: Record<string, string> = {
   insufficient_stock: "errInsufficientStock",
   nothing_selected: "errNothingSelected",
   no_location: "errNoLocation",
+  already_imported: "errAlreadyImported",
 };
 
 const STATUS_STYLE: Record<
@@ -71,13 +72,18 @@ export function XeroImportPanel({
   const [allowBackorder, setAllowBackorder] = useState(false);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [doneCount, setDoneCount] = useState(0);
   const [doneRef, setDoneRef] = useState("");
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const errMsg = (code: string | null) =>
-    code ? t(ERROR_KEYS[code] ?? "errGeneric") : null;
+    !code
+      ? null
+      : code === "already_imported"
+        ? t("errAlreadyImported", { date: errorDetail ?? "—" })
+        : t(ERROR_KEYS[code] ?? "errGeneric");
 
   function handleParse(e: React.FormEvent) {
     e.preventDefault();
@@ -172,6 +178,7 @@ export function XeroImportPanel({
       return;
     }
     setError(null);
+    setErrorDetail(null);
     startTransition(async () => {
       const res = await importXeroSale({
         location_id: locationId,
@@ -182,6 +189,7 @@ export function XeroImportPanel({
       });
       if (!res.ok) {
         setError(res.error ?? "generic");
+        setErrorDetail(res.detail ?? null);
         return;
       }
       setDoneCount(res.count ?? items.length);
@@ -197,6 +205,7 @@ export function XeroImportPanel({
     setAllowBackorder(false);
     setTruncated(false);
     setError(null);
+    setErrorDetail(null);
     setStep("upload");
     if (fileRef.current) fileRef.current.value = "";
   }
