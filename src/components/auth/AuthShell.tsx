@@ -1,4 +1,6 @@
 import { Logo20FIT } from "@/components/layout/Logo20FIT";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 
 /**
  * Centered card layout shared by the sign-in, forgot-password and reset-password
@@ -19,6 +21,12 @@ export function AuthShell({
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm">
+        {/* Theme + language controls (Header order: theme, then language).
+            preserveQuery keeps the login page's ?next= across a locale switch. */}
+        <div className="mb-4 flex items-center justify-end gap-2">
+          <ThemeToggle />
+          <LanguageSwitcher preserveQuery />
+        </div>
         <div className="mb-7 flex flex-col items-center text-center">
           <Logo20FIT height={38} />
           {title && (
