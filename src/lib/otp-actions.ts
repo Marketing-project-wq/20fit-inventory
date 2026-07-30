@@ -24,8 +24,10 @@ export type OtpState = {
 } | null;
 
 const OTP_TABLE = "shop_password_reset_otps";
+const IP_TABLE = "shop_otp_ip_requests";
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_REQUESTS_PER_WINDOW = 3; // per email per 15 min
+const MAX_REQUESTS_PER_IP = 15; // per IP per 15 min (looser: staff may share a NAT)
 const REQUEST_WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5; // per code
 
@@ -36,6 +38,19 @@ async function clientIp(): Promise<string | null> {
   const h = await headers();
   const fwd = h.get("x-forwarded-for");
   return fwd?.split(",")[0]?.trim() ?? h.get("x-real-ip") ?? null;
+}
+
+/**
+ * IP used for rate limiting. Prefers Vercel's `x-real-ip` — the single
+ * edge-observed client IP, which the platform sets and a client cannot spoof
+ * via its own `x-forwarded-for`. Falls back to the broader clientIp() heuristic
+ * (leftmost x-forwarded-for) only when x-real-ip is absent.
+ */
+async function rateLimitIp(): Promise<string | null> {
+  const h = await headers();
+  const real = h.get("x-real-ip")?.trim();
+  if (real) return real;
+  return clientIp();
 }
 
 /** Step 1 — email a fresh 6-digit code. Always reports success to avoid
@@ -52,14 +67,35 @@ export async function requestPasswordOtp(
   const sb = createSupabaseAdminClient();
   if (!sb) return { ok: false, error: "not_configured" };
 
-  // Rate limit by email first, so a 429 never depends on whether the account
+  const windowStart = new Date(Date.now() - REQUEST_WINDOW_MS).toISOString();
+
+  // Per-IP throttle — a second layer over the per-email one below. Checked
+  // before the per-email throttle and the user-existence lookup, so it's
+  // existence-independent (no enumeration signal) and stops IP abuse against
+  // random/unregistered emails early. Best-effort: the count-then-insert is
+  // non-atomic (like the per-email throttle), so a few concurrent requests may
+  // slip past — acceptable for this control. Fails open when the IP is unknown,
+  // leaving the per-email throttle as the backstop.
+  const ip = await rateLimitIp();
+  if (ip) {
+    const { count: ipCount } = await sb
+      .from(IP_TABLE)
+      .select("*", { count: "exact", head: true })
+      .eq("ip_address", ip)
+      .gt("created_at", windowStart);
+    if ((ipCount ?? 0) >= MAX_REQUESTS_PER_IP) {
+      return { ok: false, error: "rate_limited" };
+    }
+    await sb.from(IP_TABLE).insert({ ip_address: ip });
+  }
+
+  // Rate limit by email too, so a 429 never depends on whether the account
   // exists (no enumeration signal).
-  const since = new Date(Date.now() - REQUEST_WINDOW_MS).toISOString();
   const { count } = await sb
     .from(OTP_TABLE)
     .select("*", { count: "exact", head: true })
     .eq("email", email)
-    .gt("created_at", since);
+    .gt("created_at", windowStart);
   if ((count ?? 0) >= MAX_REQUESTS_PER_WINDOW) {
     return { ok: false, error: "rate_limited" };
   }
@@ -79,11 +115,20 @@ export async function requestPasswordOtp(
       expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       ip_address: await clientIp(),
     });
-    await sendEmail({
+    const { sent } = await sendEmail({
       to: email,
       subject: otpEmailSubject(code, locale),
       html: buildOtpEmailHtml({ code, email, locale }),
     });
+    // A stored code that never reached the user is a dead end: don't advance
+    // the UI to the code-entry step. sendEmail already logged the provider
+    // reason; add the flow context here without leaking it to the client.
+    if (!sent) {
+      console.error(
+        `[otp] requestPasswordOtp: email delivery failed for ${email} — code not sent.`,
+      );
+      return { ok: false, error: "email_send_failed" };
+    }
   }
 
   return { ok: true, step: "verify", message: "code_sent" };

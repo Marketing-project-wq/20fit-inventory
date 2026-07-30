@@ -497,6 +497,7 @@
     "otpTooMany": "Terlalu banyak percobaan. Minta kode baru.",
     "otpWrong": "Kode salah. Sisa {count} percobaan.",
     "otpInvalidFormat": "Masukkan 6 digit kode.",
+    "emailSendFailed": "Kami tidak dapat mengirim kode saat ini. Silakan coba lagi sebentar.",
     "updateFailed": "Gagal mengubah kata sandi. Coba lagi.",
     "emailInvalid": "Masukkan alamat email yang valid.",
     "resetTitle": "Atur Kata Sandi Baru",

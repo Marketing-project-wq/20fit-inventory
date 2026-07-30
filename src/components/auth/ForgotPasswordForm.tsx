@@ -39,6 +39,8 @@ export function ForgotPasswordForm({ locale }: { locale: string }) {
         return t("emailInvalid");
       case "not_configured":
         return t("notConfigured");
+      case "email_send_failed":
+        return t("emailSendFailed");
       case "rate_limited":
         return t("otpRateLimited");
       case "otp_expired":

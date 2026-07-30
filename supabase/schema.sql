@@ -1435,3 +1435,31 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
 $$;
 REVOKE ALL ON FUNCTION shop_find_auth_user_by_email(text) FROM public, anon, authenticated;
 GRANT EXECUTE ON FUNCTION shop_find_auth_user_by_email(text) TO service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-07): Per-IP throttle for OTP password-reset requests.
+-- A second layer over the per-email throttle: every reset request is logged by
+-- caller IP so requestPasswordOtp can cap requests per IP per 15-min window,
+-- independent of whether the target account exists. Service-role only, matching
+-- shop_password_reset_otps. Applied to the live DB; kept here idempotently.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS shop_otp_ip_requests (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ip_address  TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_otp_ip ON shop_otp_ip_requests(ip_address, created_at);
+
+-- Service-role only: RLS on + zero policies denies anon/authenticated entirely.
+ALTER TABLE shop_otp_ip_requests ENABLE ROW LEVEL SECURITY;
+
+-- Supersedes the earlier definition to also prune the IP-request log (same
+-- 1-hour retention, well past the 15-min rate-limit window).
+CREATE OR REPLACE FUNCTION shop_cleanup_expired_otps() RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  DELETE FROM shop_password_reset_otps WHERE expires_at < now() - INTERVAL '1 hour';
+  DELETE FROM shop_otp_ip_requests     WHERE created_at < now() - INTERVAL '1 hour';
+$$;
+REVOKE ALL ON FUNCTION shop_cleanup_expired_otps() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION shop_cleanup_expired_otps() TO service_role;
