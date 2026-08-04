@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
-import { Check, Loader2, Plus, Trash2, X } from "lucide-react";
-import { upsertStaff, deleteStaff } from "@/lib/settings-actions";
+import { Check, Loader2, Plus, UserX, X } from "lucide-react";
+import { upsertStaff, createUserAccount } from "@/lib/settings-actions";
 import type { StaffMember, StaffRole } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
@@ -33,11 +33,9 @@ function fmtWhen(value: string | null): string {
 function StaffRow({
   staff,
   currentUserRole,
-  onRemoved,
 }: {
   staff: StaffMember;
   currentUserRole: StaffRole | null;
-  onRemoved: (id: string) => void;
 }) {
   const t = useTranslations("settings");
   const [name, setName] = useState(staff.full_name);
@@ -82,12 +80,26 @@ function StaffRow({
     });
   }
 
-  function remove() {
-    if (!confirm(t("confirmDeleteStaff"))) return;
+  // "Remove" deactivates (is_active = false) rather than hard-deleting, so the
+  // audit trail and any linked login account are preserved. Reactivate via the
+  // Active checkbox + Save.
+  function deactivate() {
+    if (!active) return;
+    if (!confirm(t("confirmDeactivateStaff"))) return;
+    setErr(null);
     start(async () => {
-      const res = await deleteStaff({ staff_id: staff.staff_id });
-      if (res.ok) onRemoved(staff.staff_id);
-      else setErr(res.error ?? "generic");
+      const res = await upsertStaff({
+        staff_id: staff.staff_id,
+        full_name: staff.full_name,
+        nickname: staff.nickname,
+        email: staff.email ?? undefined,
+        role: staff.role,
+        is_active: false,
+      });
+      if (res.ok) {
+        staff.is_active = false;
+        setActive(false);
+      } else setErr(res.error ?? "generic");
     });
   }
 
@@ -182,12 +194,13 @@ function StaffRow({
             )}
           </button>
           <button
-            onClick={remove}
-            disabled={pending}
-            aria-label={t("deleteStaff")}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:border-danger hover:text-danger"
+            onClick={deactivate}
+            disabled={pending || !active}
+            aria-label={t("deactivateStaff")}
+            title={t("deactivateStaff")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:border-danger hover:text-danger disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted"
           >
-            <Trash2 size={14} />
+            <UserX size={14} />
           </button>
         </div>
       </td>
@@ -205,6 +218,7 @@ export function UserManagement({
   const t = useTranslations("settings");
   const [list, setList] = useState(staff);
   const [showAdd, setShowAdd] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const pendingCount = list.filter((s) => s.role === "pending").length;
 
@@ -228,12 +242,15 @@ export function UserManagement({
         </button>
       </div>
 
+      {notice && <Alert tone="success">{notice}</Alert>}
+
       {showAdd && (
-        <AddStaffForm
+        <AddUserForm
           currentUserRole={currentUserRole}
-          onCreated={(row) => {
+          onCreated={(row, linked) => {
             setList((prev) => [...prev, row]);
             setShowAdd(false);
+            setNotice(linked ? t("userLinked") : t("userCreated"));
           }}
         />
       )}
@@ -266,9 +283,6 @@ export function UserManagement({
                 key={s.staff_id}
                 staff={s}
                 currentUserRole={currentUserRole}
-                onRemoved={(id) =>
-                  setList((prev) => prev.filter((x) => x.staff_id !== id))
-                }
               />
             ))}
           </tbody>
@@ -290,12 +304,12 @@ export function UserManagement({
   );
 }
 
-function AddStaffForm({
+function AddUserForm({
   currentUserRole,
   onCreated,
 }: {
   currentUserRole: StaffRole | null;
-  onCreated: (row: StaffMember) => void;
+  onCreated: (row: StaffMember, linked: boolean) => void;
 }) {
   const t = useTranslations("settings");
   const [error, setError] = useState<string | null>(null);
@@ -311,34 +325,39 @@ function AddStaffForm({
       nickname: String(fd.get("nickname") ?? ""),
       email: String(fd.get("email") ?? ""),
       role: String(fd.get("role") ?? "staff") as StaffRole,
-      is_active: true,
+      password: String(fd.get("password") ?? ""),
     };
     const form = e.currentTarget;
     start(async () => {
-      const res = await upsertStaff(input);
+      const res = await createUserAccount(input);
       if (!res.ok) {
         setError(
-          res.error === "email_exists"
-            ? t("emailExists")
-            : res.error === "forbidden"
-              ? t("forbidden")
-              : res.error === "invalid_input"
-                ? t("invalidStaff")
-                : t("genericError"),
+          res.error === "user_exists"
+            ? t("userExists")
+            : res.error === "email_invalid" || res.error === "invalid_input"
+              ? t("emailInvalid")
+              : res.error === "password_short"
+                ? t("passwordShort")
+                : res.error === "forbidden"
+                  ? t("forbidden")
+                  : t("genericError"),
         );
         return;
       }
-      onCreated({
-        staff_id: res.id ?? crypto.randomUUID(),
-        full_name: input.full_name.trim(),
-        nickname: input.nickname.trim() || null,
-        email: input.email.trim() || null,
-        phone: null,
-        role: input.role,
-        is_active: true,
-        last_activity_at: null,
-        last_login_at: null,
-      });
+      onCreated(
+        {
+          staff_id: res.id ?? crypto.randomUUID(),
+          full_name: input.full_name.trim(),
+          nickname: input.nickname.trim() || null,
+          email: input.email.trim().toLowerCase() || null,
+          phone: null,
+          role: input.role,
+          is_active: true,
+          last_activity_at: null,
+          last_login_at: null,
+        },
+        res.linked ?? false,
+      );
       form.reset();
     });
   }
@@ -348,21 +367,22 @@ function AddStaffForm({
       onSubmit={onSubmit}
       className="space-y-4 rounded-xl border border-border bg-surface p-5"
     >
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label={t("fullName")}>
           <input name="full_name" required maxLength={200} className={inputCls} />
-        </Field>
-        <Field label={t("nickname")}>
-          <input name="nickname" maxLength={60} className={inputCls} />
         </Field>
         <Field label={t("emailLabel")}>
           <input
             name="email"
             type="email"
+            required
             placeholder="email@20fit.id"
             maxLength={200}
             className={inputCls}
           />
+        </Field>
+        <Field label={t("nickname")}>
+          <input name="nickname" maxLength={60} className={inputCls} />
         </Field>
         <Field label={t("role")}>
           <select name="role" defaultValue="staff" className={inputCls}>
@@ -372,6 +392,17 @@ function AddStaffForm({
               </option>
             ))}
           </select>
+        </Field>
+        <Field label={t("tempPassword")} hint={t("tempPasswordHint")}>
+          <input
+            name="password"
+            type="text"
+            required
+            minLength={8}
+            maxLength={200}
+            autoComplete="off"
+            className={inputCls}
+          />
         </Field>
       </div>
 

@@ -613,6 +613,20 @@ export async function updatePassword(
 
   const { error } = await sb.auth.updateUser({ password });
   if (error) return { ok: false, error: "update_failed" };
+
+  // The user proved email ownership (OTP/reset link) and set a fresh password,
+  // so clear any forced-change flag — no need to send them through /ganti-sandi
+  // again. Matched by user_id, then email, on the caller's own staff row.
+  const clear = { must_change_password: false, updated_at: new Date().toISOString() };
+  const byId = await sb
+    .from("shop_staff")
+    .update(clear)
+    .eq("user_id", user.id)
+    .select("staff_id");
+  if ((!byId.data || byId.data.length === 0) && user.email) {
+    await sb.from("shop_staff").update(clear).eq("email", user.email);
+  }
+
   await sb.auth.signOut();
   return { ok: true, message: "password_updated" };
 }
