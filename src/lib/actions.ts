@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth";
 
 export type ActionState = {
   ok: boolean;
@@ -13,17 +14,15 @@ export type ActionState = {
 } | null;
 
 /**
- * The stock RPCs are SECURITY DEFINER and granted to `authenticated`, so we call
- * them as the logged-in user — no service-role key required.
+ * Authed client for stock/movement actions. Requires an ACTIVE shop_staff row
+ * of at least `staff` — viewers, pending, and unregistered users are rejected
+ * (`forbidden`). The stock RPCs are SECURITY DEFINER granted to `authenticated`,
+ * so we run them as the logged-in user — no service-role key required.
  */
 async function getAuthedClient() {
-  const sb = await createSupabaseServerClient();
-  if (!sb) return { sb: null, user: null, error: "not_configured" as const };
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return { sb: null, user: null, error: "unauthorized" as const };
-  return { sb, user, error: null as null };
+  const g = await requireRole("staff");
+  if (g.error) return { sb: null, user: null, error: g.error };
+  return { sb: g.sb, user: g.user, error: null as null };
 }
 
 const optionalNumber = z.preprocess(

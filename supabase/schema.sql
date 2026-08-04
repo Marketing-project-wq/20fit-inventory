@@ -594,7 +594,7 @@ CREATE TABLE IF NOT EXISTS shop_staff (
   notes      TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT shop_staff_role_chk CHECK (role IN ('admin','manager','staff','viewer'))
+  CONSTRAINT shop_staff_role_chk CHECK (role IN ('super_admin','admin','manager','staff','viewer','pending'))
 );
 ALTER TABLE shop_staff ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS shop_staff_read ON shop_staff;
@@ -1694,3 +1694,24 @@ SET user_id = u.id, updated_at = now()
 FROM auth.users u
 WHERE s.user_id IS NULL
   AND lower(btrim(s.email)) = lower(btrim(u.email));
+
+-- ============================================================================
+-- MIGRATION (2026-08): Phase 0 authorization hardening — role vocabulary.
+-- Adds ranked 'super_admin' (above admin) and 'pending' (authenticated but
+-- authorized for nothing) to the shop_staff role CHECK. App-level authorization
+-- now gates on an ACTIVE shop_staff row whose role is at least viewer (see
+-- src/lib/roles.ts + src/lib/auth.ts + middleware). Applied to the live DB;
+-- kept here idempotently. (The inline CREATE TABLE constraint above already
+-- lists all six for fresh provisions; this ALTER updates existing databases.)
+-- ============================================================================
+ALTER TABLE shop_staff DROP CONSTRAINT IF EXISTS shop_staff_role_chk;
+ALTER TABLE shop_staff ADD CONSTRAINT shop_staff_role_chk
+  CHECK (role IN ('super_admin','admin','manager','staff','viewer','pending'));
+
+-- Bootstrap the first super_admin (Tifany). Only a super_admin can mint another
+-- via the app, so the first one is set here. Guarded by staff_id + email so it
+-- only touches that row; idempotent. Applied to the live DB.
+UPDATE shop_staff
+SET role = 'super_admin', updated_at = now()
+WHERE staff_id = '18590fb5-3c37-4996-96aa-2d65bfc123f8'
+  AND lower(btrim(email)) = 'tifany@20fit.id';

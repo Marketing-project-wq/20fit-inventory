@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { StaffRole } from "@/lib/roles";
 
 export type StockStatus = "ok" | "low" | "out";
 
@@ -713,7 +714,7 @@ export async function getBrands(): Promise<{ brand_id: string; name: string }[]>
 }
 
 // -------------------------------- Staff ------------------------------------
-export type StaffRole = "admin" | "manager" | "staff" | "viewer";
+export type { StaffRole };
 export type StaffMember = {
   staff_id: string;
   full_name: string;
@@ -734,7 +735,9 @@ export async function getStaff(): Promise<StaffMember[] | null> {
   return (data ?? []) as StaffMember[];
 }
 
-/** The logged-in user's email + their 20FIT Shop role (null if not registered). */
+/** The logged-in user's email + their 20FIT Shop role. `role` is null when the
+ *  user has no ACTIVE shop_staff row (unregistered / pending / deactivated).
+ *  Matches by user_id (backfilled), falling back to email. */
 export async function getCurrentStaff(): Promise<{
   email: string;
   role: StaffRole | null;
@@ -744,14 +747,26 @@ export async function getCurrentStaff(): Promise<{
   const {
     data: { user },
   } = await sb.auth.getUser();
-  const email = user?.email ?? "";
-  if (!email) return { email: "", role: null };
-  const { data } = await sb
-    .from("shop_staff")
-    .select("role")
-    .eq("email", email)
-    .maybeSingle();
-  return { email, role: (data?.role as StaffRole) ?? null };
+  if (!user) return { email: "", role: null };
+  const email = user.email ?? "";
+  let row = (
+    await sb
+      .from("shop_staff")
+      .select("role,is_active")
+      .eq("user_id", user.id)
+      .maybeSingle()
+  ).data;
+  if (!row && email) {
+    row = (
+      await sb
+        .from("shop_staff")
+        .select("role,is_active")
+        .eq("email", email)
+        .maybeSingle()
+    ).data;
+  }
+  const role = row && row.is_active ? (row.role as StaffRole) : null;
+  return { email, role };
 }
 
 // ----------------------------- Stock opname --------------------------------

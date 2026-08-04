@@ -10,7 +10,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Auth screens render full-bleed, without the sidebar/header chrome.
-  const bareLayout = ["/login", "/lupa-sandi", "/reset-sandi"].includes(pathname);
+  const bareLayout = ["/login", "/lupa-sandi", "/reset-sandi", "/pending"].includes(pathname);
   if (bareLayout) return <>{children}</>;
 
   return (

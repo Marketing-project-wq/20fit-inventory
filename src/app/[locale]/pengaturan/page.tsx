@@ -10,6 +10,7 @@ import {
   getSalesStaffAdmin,
 } from "@/lib/data";
 import { SettingsTabs } from "@/components/settings/SettingsTabs";
+import { roleAtLeast } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function PengaturanPage() {
       getSalesStaffAdmin(),
       getCurrentStaff(),
     ]);
-  const canManageStaff = current.role === null || current.role === "admin";
+  const canManageStaff = roleAtLeast(current.role, "admin");
 
   return (
     <div className="space-y-6">
