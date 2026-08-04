@@ -33,6 +33,7 @@ export function CentrSoImport({
   const [locationId, setLocationId] = useState(locations[0]?.location_id ?? "");
   const [localSkus, setLocalSkus] = useState<Opt[]>(skus);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [result, setResult] = useState<{ count: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -43,6 +44,7 @@ export function CentrSoImport({
   async function onFile(file: File) {
     setStep("parsing");
     setError(null);
+    setErrorDetail(null);
     const fd = new FormData();
     fd.append("file", file);
     const res = await parseCentrSoFile(fd);
@@ -104,6 +106,7 @@ export function CentrSoImport({
     });
     if (!res.ok) {
       setError(res.error ?? "error");
+      setErrorDetail(res.detail ?? null);
       setStep("review");
       return;
     }
@@ -117,6 +120,7 @@ export function CentrSoImport({
     setRows([]);
     setResult(null);
     setError(null);
+    setErrorDetail(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -130,7 +134,9 @@ export function CentrSoImport({
         </div>
         {error && (
           <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-            {t.has(`err_${error}`) ? t(`err_${error}`) : t("err_generic")}
+            {t.has(`err_${error}`)
+              ? t(`err_${error}`, { date: errorDetail ?? "" })
+              : t("err_generic")}
           </div>
         )}
         <label
@@ -199,7 +205,9 @@ export function CentrSoImport({
     <div className="space-y-4">
       {error && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {t(`err_${error}`, { defaultValue: t("err_generic") })}
+          {t.has(`err_${error}`)
+            ? t(`err_${error}`, { date: errorDetail ?? "" })
+            : t("err_generic")}
         </div>
       )}
 
