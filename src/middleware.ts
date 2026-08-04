@@ -3,6 +3,7 @@ import createIntlMiddleware from "next-intl/middleware";
 import { createServerClient } from "@supabase/ssr";
 import { routing } from "./i18n/routing";
 import { getSupabaseUrl, getSupabaseAnonKey } from "./lib/supabase/env";
+import { ROLE_RANK, APP_ACCESS_MIN, type StaffRole } from "./lib/roles";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
@@ -67,6 +68,45 @@ export async function middleware(request: NextRequest) {
     redirectUrl.pathname = `/${locale}`;
     redirectUrl.searchParams.delete("next");
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // 4. Role gate. Authority comes from an ACTIVE shop_staff row (role >=
+  //    APP_ACCESS_MIN) — auth.users is a shared ecosystem pool, so a session
+  //    alone grants nothing. Pending / unregistered / deactivated users are
+  //    parked on the pending screen; approved users never sit on it.
+  const pendingPath = `/${locale}/pending`;
+  const isPending = pathname === pendingPath;
+  if (user && !isPublic) {
+    let row = (
+      await supabase
+        .from("shop_staff")
+        .select("role,is_active")
+        .eq("user_id", user.id)
+        .maybeSingle()
+    ).data;
+    if (!row && user.email) {
+      row = (
+        await supabase
+          .from("shop_staff")
+          .select("role,is_active")
+          .eq("email", user.email)
+          .maybeSingle()
+      ).data;
+    }
+    const rank = row && row.is_active ? (ROLE_RANK[row.role as StaffRole] ?? -1) : -1;
+    const authorized = rank >= ROLE_RANK[APP_ACCESS_MIN];
+
+    if (!authorized && !isPending) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = pendingPath;
+      redirectUrl.searchParams.delete("next");
+      return NextResponse.redirect(redirectUrl);
+    }
+    if (authorized && isPending) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = `/${locale}`;
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return response;

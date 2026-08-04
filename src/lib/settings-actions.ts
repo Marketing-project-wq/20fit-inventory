@@ -4,6 +4,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "@/lib/import-server";
+import { requireAdmin, requireActiveStaff } from "@/lib/auth";
+import { roleAtLeast, type StaffRole } from "@/lib/roles";
 
 export type SettingsResult = { ok: boolean; error?: string; id?: string };
 
@@ -51,7 +53,7 @@ const variantSchema = z.object({
 });
 
 export async function updateVariant(input: unknown): Promise<SettingsResult> {
-  const { sb, error } = await requireUser();
+  const { sb, error } = await requireAdmin();
   if (error) return { ok: false, error };
   const p = variantSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "invalid_input" };
@@ -86,7 +88,7 @@ const createSkuSchema = z.object({
 });
 
 export async function createSku(input: unknown): Promise<SettingsResult> {
-  const { sb, error } = await requireUser();
+  const { sb, error } = await requireAdmin();
   if (error) return { ok: false, error };
   const p = createSkuSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "invalid_input" };
@@ -120,7 +122,7 @@ const locationSchema = z.object({
 });
 
 export async function upsertLocation(input: unknown): Promise<SettingsResult> {
-  const { sb, error } = await requireUser();
+  const { sb, error } = await requireAdmin();
   if (error) return { ok: false, error };
   const p = locationSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "invalid_input" };
@@ -147,19 +149,31 @@ export async function upsertLocation(input: unknown): Promise<SettingsResult> {
 }
 
 // -------------------------------- Staff -------------------------------------
-/** Only admins (or the bootstrap case with no staff record yet) may manage staff. */
-async function canManageStaff(sb: SupabaseClient): Promise<boolean> {
+/** The current user's role from their ACTIVE shop_staff row (null if none).
+ *  Matches by user_id (backfilled), falling back to email. No bootstrap bypass. */
+async function currentRole(sb: SupabaseClient): Promise<StaffRole | null> {
   const {
     data: { user },
   } = await sb.auth.getUser();
-  const email = user?.email;
-  if (!email) return false;
-  const { data } = await sb
-    .from("shop_staff")
-    .select("role")
-    .eq("email", email)
-    .maybeSingle();
-  return !data || data.role === "admin";
+  if (!user) return null;
+  let row = (
+    await sb
+      .from("shop_staff")
+      .select("role,is_active")
+      .eq("user_id", user.id)
+      .maybeSingle()
+  ).data;
+  if (!row && user.email) {
+    row = (
+      await sb
+        .from("shop_staff")
+        .select("role,is_active")
+        .eq("email", user.email)
+        .maybeSingle()
+    ).data;
+  }
+  if (!row || !row.is_active) return null;
+  return row.role as StaffRole;
 }
 
 const staffSchema = z.object({
@@ -170,17 +184,31 @@ const staffSchema = z.object({
     z.string().trim().email().max(200).optional(),
   ),
   phone: z.string().trim().max(50).optional(),
-  role: z.enum(["admin", "manager", "staff", "viewer"]),
+  role: z.enum(["super_admin", "admin", "manager", "staff", "viewer", "pending"]),
   is_active: z.boolean(),
 });
 
 export async function upsertStaff(input: unknown): Promise<SettingsResult> {
   const { sb, error } = await requireUser();
   if (error) return { ok: false, error };
-  if (!(await canManageStaff(sb!))) return { ok: false, error: "forbidden" };
+  const actor = await currentRole(sb!);
+  if (!roleAtLeast(actor, "admin")) return { ok: false, error: "forbidden" };
   const p = staffSchema.safeParse(input);
   if (!p.success) return { ok: false, error: "invalid_input" };
   const d = p.data;
+
+  // Only a super_admin may grant super_admin, or edit an existing super_admin row.
+  if (d.role === "super_admin" && actor !== "super_admin")
+    return { ok: false, error: "forbidden" };
+  if (d.staff_id) {
+    const { data: target } = await sb!
+      .from("shop_staff")
+      .select("role")
+      .eq("staff_id", d.staff_id)
+      .maybeSingle();
+    if (target?.role === "super_admin" && actor !== "super_admin")
+      return { ok: false, error: "forbidden" };
+  }
 
   const row = {
     full_name: d.full_name,
@@ -215,11 +243,20 @@ export async function upsertStaff(input: unknown): Promise<SettingsResult> {
 export async function deleteStaff(input: unknown): Promise<SettingsResult> {
   const { sb, error } = await requireUser();
   if (error) return { ok: false, error };
-  if (!(await canManageStaff(sb!))) return { ok: false, error: "forbidden" };
+  const actor = await currentRole(sb!);
+  if (!roleAtLeast(actor, "admin")) return { ok: false, error: "forbidden" };
   const parsed = z
     .object({ staff_id: z.string().uuid() })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
+  // Only a super_admin may delete a super_admin row.
+  const { data: target } = await sb!
+    .from("shop_staff")
+    .select("role")
+    .eq("staff_id", parsed.data.staff_id)
+    .maybeSingle();
+  if (target?.role === "super_admin" && actor !== "super_admin")
+    return { ok: false, error: "forbidden" };
   const { error: e } = await sb!
     .from("shop_staff")
     .delete()
@@ -234,7 +271,8 @@ export async function changePassword(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const { sb, error } = await requireUser();
+  // Self-service: any active staff (viewer+) may change their own password.
+  const { sb, error } = await requireActiveStaff();
   if (error) return { ok: false, error };
   const password = String(formData.get("password") ?? "");
   const confirm = String(formData.get("confirm") ?? "");

@@ -3,6 +3,7 @@
 import * as XLSX from "xlsx";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/import-server";
+import { requireAdmin } from "@/lib/auth";
 import { HEADER_ALIASES, type SkuColumnKey } from "@/lib/sku/template";
 import type {
   ImportRow,
@@ -167,7 +168,8 @@ export async function parseSkuImport(formData: FormData): Promise<ParsePreview> 
 }
 
 export async function commitSkuImport(rowsJson: string): Promise<ImportResult> {
-  const { sb, error: authErr } = await requireUser();
+  // Bulk SKU create/update is master-data → admin floor.
+  const { sb, error: authErr } = await requireAdmin();
   if (authErr)
     return { ok: false, created: 0, updated: 0, failed: 0, errors: [], error: authErr };
 

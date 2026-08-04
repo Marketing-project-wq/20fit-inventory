@@ -2,20 +2,18 @@
 // NOT a "use server" module — it exports plain helpers, so importing xlsx here
 // never leaks into a client bundle (only server action files import this).
 import * as XLSX from "xlsx";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { detectColumns, type Cols } from "@/lib/import";
+import { requireRole } from "@/lib/auth";
 
 export const MAX_BYTES = 5_000_000;
 export const ROW_LIMIT = 1000;
 
+/** Import/settings helper: requires an ACTIVE shop_staff row of at least
+ *  `staff` (viewers/pending/unregistered → `forbidden`). */
 export async function requireUser() {
-  const sb = await createSupabaseServerClient();
-  if (!sb) return { sb: null, error: "not_configured" as const };
-  const {
-    data: { user },
-  } = await sb.auth.getUser();
-  if (!user) return { sb: null, error: "unauthorized" as const };
-  return { sb, error: null as null };
+  const g = await requireRole("staff");
+  if (g.error) return { sb: null, error: g.error };
+  return { sb: g.sb, error: null as null };
 }
 
 /** Read an uploaded .xlsx/.xls/.csv into a raw 2-D grid + detected columns. */
