@@ -1566,7 +1566,10 @@ END; $function$;
 -- client cannot read auth.users, so expose a minimal SECURITY DEFINER helper —
 -- scoped to ONLY users who have performed a movement (this is a SHARED project
 -- whose auth.users holds the whole 20FIT ecosystem, so we must not expose all of
--- it). shop_staff.user_id is unpopulated, so it cannot be used for this.
+-- it). Also returns a display name resolved from the shop's own staff row
+-- (nickname > full_name > email); see the Phase 1 migration block below for the
+-- current definition (this base one is kept for historical context and is
+-- superseded by the DROP/CREATE further down).
 CREATE OR REPLACE FUNCTION public.shop_movement_actors()
 RETURNS TABLE(user_id uuid, email text)
 LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
@@ -1715,3 +1718,53 @@ UPDATE shop_staff
 SET role = 'super_admin', updated_at = now()
 WHERE staff_id = '18590fb5-3c37-4996-96aa-2d65bfc123f8'
   AND lower(btrim(email)) = 'tifany@20fit.id';
+
+-- ============================================================================
+-- MIGRATION (2026-08): Phase 1 — nickname + last_activity_at + display names.
+--   * shop_staff.nickname: optional short display name. Shown across all logs
+--     and the header/account, taking priority: nickname > full_name > email.
+--   * shop_staff.last_activity_at: bumped by the server-side auth guard on each
+--     successful authorization (see src/lib/auth.ts requireRole), so User
+--     Management can show real recency of activity.
+--   * shop_movement_actors(): return type gains display_name (resolved from the
+--     shop's own staff row); DROP + CREATE because the OUT columns changed.
+--   * shop_staff_last_login(): last_sign_in_at for staff-linked users only —
+--     scoped to shop_staff, never the whole shared ecosystem auth.users pool.
+-- Applied to the live DB; kept here idempotently.
+-- ============================================================================
+ALTER TABLE public.shop_staff ADD COLUMN IF NOT EXISTS nickname text;
+ALTER TABLE public.shop_staff ADD COLUMN IF NOT EXISTS last_activity_at timestamptz;
+
+DROP FUNCTION IF EXISTS public.shop_movement_actors();
+CREATE FUNCTION public.shop_movement_actors()
+RETURNS TABLE(user_id uuid, email text, display_name text)
+LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+  SELECT u.id, u.email,
+         COALESCE(
+           (SELECT COALESCE(NULLIF(btrim(s.nickname), ''), NULLIF(btrim(s.full_name), ''))
+            FROM shop_staff s
+            WHERE s.user_id = u.id OR lower(btrim(s.email)) = lower(btrim(u.email))
+            ORDER BY (s.user_id = u.id) DESC NULLS LAST
+            LIMIT 1),
+           u.email
+         ) AS display_name
+  FROM auth.users u
+  WHERE u.id IN (
+    SELECT DISTINCT performed_by FROM shop_stock_movements WHERE performed_by IS NOT NULL
+  )
+$function$;
+REVOKE ALL ON FUNCTION public.shop_movement_actors() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.shop_movement_actors() TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.shop_staff_last_login()
+RETURNS TABLE(user_id uuid, email text, last_sign_in_at timestamptz)
+LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+  SELECT u.id, u.email, u.last_sign_in_at
+  FROM auth.users u
+  WHERE u.id IN (SELECT user_id FROM shop_staff WHERE user_id IS NOT NULL)
+     OR lower(btrim(u.email)) IN (SELECT lower(btrim(email)) FROM shop_staff WHERE email IS NOT NULL)
+$function$;
+REVOKE ALL ON FUNCTION public.shop_staff_last_login() FROM public, anon;
+GRANT EXECUTE ON FUNCTION public.shop_staff_last_login() TO authenticated, service_role;
