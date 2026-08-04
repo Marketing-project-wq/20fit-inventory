@@ -43,7 +43,7 @@ export type Movement = {
   reason_code: string | null;
   notes: string | null;
   performed_by: string | null;
-  performed_by_email: string | null;
+  performed_by_name: string | null;
 };
 
 export type Snapshot = {
@@ -176,16 +176,21 @@ export async function getSnapshot(): Promise<Snapshot | null> {
   };
 }
 
-type MovementActor = { user_id: string; email: string | null };
+type MovementActor = {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+};
 
 /**
  * Recent stock movements (ledger), newest first.
  *
- * `opts.user` is a server-side, URL-driven filter on the performing user's
- * email (substring). The performer is `shop_stock_movements.performed_by`
- * (an auth user id); since `shop_staff.user_id` is unpopulated, the display
- * name/email is resolved via `shop_movement_actors()` (a SECURITY DEFINER
- * helper scoped to users who have actually performed a movement).
+ * `opts.user` is a server-side, URL-driven filter on the performing user
+ * (substring match on display name or email). The performer is
+ * `shop_stock_movements.performed_by` (an auth user id); the display name is
+ * resolved via `shop_movement_actors()` (a SECURITY DEFINER helper scoped to
+ * users who have actually performed a movement) with priority
+ * nickname > full_name > email.
  */
 export async function getMovements(
   limit = 100,
@@ -196,14 +201,20 @@ export async function getMovements(
 
   const { data: actorRows } = await sb.rpc("shop_movement_actors");
   const actors = (actorRows ?? []) as MovementActor[];
-  const emailById = new Map(actors.map((a) => [a.user_id, a.email ?? ""]));
+  const nameById = new Map(
+    actors.map((a) => [a.user_id, a.display_name || a.email || ""]),
+  );
 
-  // Resolve the optional user filter to matching performer ids.
+  // Resolve the optional user filter to matching performer ids (name or email).
   const userQuery = opts?.user?.trim().toLowerCase();
   let filterIds: string[] | null = null;
   if (userQuery) {
     filterIds = actors
-      .filter((a) => (a.email ?? "").toLowerCase().includes(userQuery))
+      .filter(
+        (a) =>
+          (a.display_name ?? "").toLowerCase().includes(userQuery) ||
+          (a.email ?? "").toLowerCase().includes(userQuery),
+      )
       .map((a) => a.user_id);
     if (filterIds.length === 0) return []; // no actor matches → empty result
   }
@@ -243,8 +254,8 @@ export async function getMovements(
       reason_code: m.reason_code,
       notes: m.notes,
       performed_by: m.performed_by ?? null,
-      performed_by_email: m.performed_by
-        ? emailById.get(m.performed_by) || null
+      performed_by_name: m.performed_by
+        ? nameById.get(m.performed_by) || null
         : null,
     };
   });
@@ -598,7 +609,7 @@ export type AuditLogFilters = {
 };
 
 const AUDIT_COLS =
-  "log_id,user_email,user_name,action,entity_type,description,module,before_value,after_value,created_at";
+  "log_id,user_id,user_email,user_name,action,entity_type,description,module,before_value,after_value,created_at";
 
 export const AUDIT_PAGE_SIZE = 50;
 
@@ -620,9 +631,34 @@ export async function getAuditLogs(
   if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00`);
   if (filters.to) q = q.lte("created_at", `${filters.to}T23:59:59`);
   if (filters.search) q = q.ilike("description", `%${filters.search}%`);
-  const { data, count, error } = await q;
+  const [{ data, count, error }, staff] = await Promise.all([
+    q,
+    sb.from("shop_staff").select("user_id,email,nickname,full_name"),
+  ]);
   if (error) return null;
-  return { rows: (data ?? []) as unknown as AuditLogRow[], total: count ?? 0 };
+
+  // Resolve the display name from the shop's own staff (nickname > full_name),
+  // falling back to the name/email stored on the log row at write time. Match by
+  // user_id first, then email.
+  const byUserId = new Map<string, string>();
+  const byEmail = new Map<string, string>();
+  for (const s of staff.data ?? []) {
+    const name =
+      (s.nickname?.trim() || null) ?? (s.full_name?.trim() || null) ?? null;
+    if (!name) continue;
+    if (s.user_id) byUserId.set(s.user_id, name);
+    if (s.email) byEmail.set(s.email.toLowerCase().trim(), name);
+  }
+  const rows = ((data ?? []) as unknown as (AuditLogRow & {
+    user_id: string | null;
+  })[]).map((r) => ({
+    ...r,
+    user_name:
+      (r.user_id ? byUserId.get(r.user_id) : undefined) ??
+      (r.user_email ? byEmail.get(r.user_email.toLowerCase().trim()) : undefined) ??
+      r.user_name,
+  }));
+  return { rows, total: count ?? 0 };
 }
 
 // ------------------------------- Settings ----------------------------------
@@ -718,55 +754,88 @@ export type { StaffRole };
 export type StaffMember = {
   staff_id: string;
   full_name: string;
+  nickname: string | null;
   email: string | null;
   phone: string | null;
   role: StaffRole;
   is_active: boolean;
+  last_activity_at: string | null;
+  last_login_at: string | null;
+};
+
+type StaffLastLogin = {
+  user_id: string;
+  email: string | null;
+  last_sign_in_at: string | null;
 };
 
 export async function getStaff(): Promise<StaffMember[] | null> {
   const sb = await createSupabaseServerClient();
   if (!sb) return null;
-  const { data, error } = await sb
-    .from("shop_staff")
-    .select("staff_id,full_name,email,phone,role,is_active")
-    .order("full_name");
-  if (error) return null;
-  return (data ?? []) as StaffMember[];
+  const [staff, logins] = await Promise.all([
+    sb
+      .from("shop_staff")
+      .select(
+        "staff_id,user_id,full_name,nickname,email,phone,role,is_active,last_activity_at",
+      )
+      .order("full_name"),
+    sb.rpc("shop_staff_last_login"),
+  ]);
+  if (staff.error) return null;
+
+  // Last login lives in auth.users; resolve it by user_id, falling back to email.
+  const loginRows = (logins.data ?? []) as StaffLastLogin[];
+  const loginByUserId = new Map(
+    loginRows.filter((l) => l.user_id).map((l) => [l.user_id, l.last_sign_in_at]),
+  );
+  const loginByEmail = new Map(
+    loginRows
+      .filter((l) => l.email)
+      .map((l) => [l.email!.toLowerCase().trim(), l.last_sign_in_at]),
+  );
+
+  return (staff.data ?? []).map((s) => ({
+    staff_id: s.staff_id,
+    full_name: s.full_name,
+    nickname: s.nickname ?? null,
+    email: s.email ?? null,
+    phone: s.phone ?? null,
+    role: s.role as StaffRole,
+    is_active: s.is_active ?? true,
+    last_activity_at: s.last_activity_at ?? null,
+    last_login_at:
+      (s.user_id ? loginByUserId.get(s.user_id) : null) ??
+      (s.email ? loginByEmail.get(s.email.toLowerCase().trim()) : null) ??
+      null,
+  }));
 }
 
-/** The logged-in user's email + their 20FIT Shop role. `role` is null when the
- *  user has no ACTIVE shop_staff row (unregistered / pending / deactivated).
- *  Matches by user_id (backfilled), falling back to email. */
+/** The logged-in user's email + nickname + their 20FIT Shop role. `role` is null
+ *  when the user has no ACTIVE shop_staff row (unregistered / pending /
+ *  deactivated). Matches by user_id (backfilled), falling back to email. */
 export async function getCurrentStaff(): Promise<{
   email: string;
+  nickname: string | null;
   role: StaffRole | null;
 }> {
   const sb = await createSupabaseServerClient();
-  if (!sb) return { email: "", role: null };
+  if (!sb) return { email: "", nickname: null, role: null };
   const {
     data: { user },
   } = await sb.auth.getUser();
-  if (!user) return { email: "", role: null };
+  if (!user) return { email: "", nickname: null, role: null };
   const email = user.email ?? "";
+  const cols = "role,is_active,nickname";
   let row = (
-    await sb
-      .from("shop_staff")
-      .select("role,is_active")
-      .eq("user_id", user.id)
-      .maybeSingle()
+    await sb.from("shop_staff").select(cols).eq("user_id", user.id).maybeSingle()
   ).data;
   if (!row && email) {
     row = (
-      await sb
-        .from("shop_staff")
-        .select("role,is_active")
-        .eq("email", email)
-        .maybeSingle()
+      await sb.from("shop_staff").select(cols).eq("email", email).maybeSingle()
     ).data;
   }
   const role = row && row.is_active ? (row.role as StaffRole) : null;
-  return { email, role };
+  return { email, nickname: row?.nickname ?? null, role };
 }
 
 // ----------------------------- Stock opname --------------------------------

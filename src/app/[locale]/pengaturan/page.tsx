@@ -53,6 +53,7 @@ export default async function PengaturanPage() {
           salesStaff={salesStaff ?? []}
           canManageStaff={canManageStaff}
           email={current.email}
+          nickname={current.nickname}
           role={current.role}
         />
       )}

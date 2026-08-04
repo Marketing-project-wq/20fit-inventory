@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Package, MapPin, UserCog, Users, Contact } from "lucide-react";
 import { SkuManager } from "./SkuManager";
 import { LocationManager } from "./LocationManager";
-import { StaffManager } from "./StaffManager";
+import { UserManagement } from "./UserManagement";
 import { SalesStaffManager } from "./SalesStaffManager";
 import { AccountPanel } from "./AccountPanel";
 import type {
@@ -34,6 +34,7 @@ export function SettingsTabs({
   salesStaff,
   canManageStaff,
   email,
+  nickname,
   role,
 }: {
   skus: SkuAdmin[];
@@ -44,9 +45,30 @@ export function SettingsTabs({
   salesStaff: SalesStaff[];
   canManageStaff: boolean;
   email: string;
+  nickname: string | null;
   role: StaffRole | null;
 }) {
   const t = useTranslations("settings");
+
+  // Admins manage catalog / locations / users / sales staff. Everyone else only
+  // gets their own Account tab (self-service: nickname + password).
+  const isAdmin = canManageStaff;
+
+  if (!isAdmin) {
+    return (
+      <Tabs.Root defaultValue="account">
+        <Tabs.List className="mb-5 flex flex-wrap gap-5 border-b border-border">
+          <Tabs.Trigger value="account" className={triggerCls}>
+            <UserCog size={15} />
+            {t("tabAccount")}
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="account" className="focus:outline-none">
+          <AccountPanel email={email} nickname={nickname} role={role} />
+        </Tabs.Content>
+      </Tabs.Root>
+    );
+  }
 
   return (
     <Tabs.Root defaultValue="sku">
@@ -61,7 +83,7 @@ export function SettingsTabs({
         </Tabs.Trigger>
         <Tabs.Trigger value="staff" className={triggerCls}>
           <Users size={15} />
-          {t("tabStaff")}
+          {t("tabUsers")}
         </Tabs.Trigger>
         <Tabs.Trigger value="salesStaff" className={triggerCls}>
           <Contact size={15} />
@@ -80,13 +102,13 @@ export function SettingsTabs({
         <LocationManager locations={locations} />
       </Tabs.Content>
       <Tabs.Content value="staff" className="focus:outline-none">
-        <StaffManager staff={staff} canManage={canManageStaff} />
+        <UserManagement staff={staff} currentUserRole={role} />
       </Tabs.Content>
       <Tabs.Content value="salesStaff" className="focus:outline-none">
         <SalesStaffManager staff={salesStaff} />
       </Tabs.Content>
       <Tabs.Content value="account" className="focus:outline-none">
-        <AccountPanel email={email} role={role} />
+        <AccountPanel email={email} nickname={nickname} role={role} />
       </Tabs.Content>
     </Tabs.Root>
   );

@@ -639,7 +639,7 @@ export async function exportAuditLogsCsv(
   if (authErr) return { ok: false, error: authErr };
   let q = sb!
     .from("shop_audit_logs")
-    .select("created_at,user_email,user_name,module,action,description")
+    .select("created_at,user_id,user_email,user_name,module,action,description")
     .order("created_at", { ascending: false })
     .limit(5000);
   if (filters.module) q = q.eq("module", filters.module);
@@ -647,15 +647,34 @@ export async function exportAuditLogsCsv(
   if (filters.from) q = q.gte("created_at", `${filters.from}T00:00:00`);
   if (filters.to) q = q.lte("created_at", `${filters.to}T23:59:59`);
   if (filters.search) q = q.ilike("description", `%${filters.search}%`);
-  const { data, error } = await q;
+  const [{ data, error }, staff] = await Promise.all([
+    q,
+    sb!.from("shop_staff").select("user_id,email,nickname,full_name"),
+  ]);
   if (error) return { ok: false, error: error.message };
+
+  // Resolve display name the same way the on-screen log does (nickname >
+  // full_name), falling back to the name stored on the row at write time.
+  const byUserId = new Map<string, string>();
+  const byEmail = new Map<string, string>();
+  for (const s of staff.data ?? []) {
+    const name = (s.nickname?.trim() || null) ?? (s.full_name?.trim() || null);
+    if (!name) continue;
+    if (s.user_id) byUserId.set(s.user_id, name);
+    if (s.email) byEmail.set(s.email.toLowerCase().trim(), name);
+  }
 
   const header = ["Waktu", "Email User", "Nama User", "Modul", "Aksi", "Deskripsi"];
   const rows = (data ?? []).map((r) =>
     [
       r.created_at,
       r.user_email ?? "",
-      r.user_name ?? "",
+      (r.user_id ? byUserId.get(r.user_id) : undefined) ??
+        (r.user_email
+          ? byEmail.get(r.user_email.toLowerCase().trim())
+          : undefined) ??
+        r.user_name ??
+        "",
       r.module ?? "",
       r.action,
       r.description ?? "",

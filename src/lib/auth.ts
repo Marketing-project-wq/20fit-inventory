@@ -64,6 +64,11 @@ export async function requireRole(min: StaffRole): Promise<Guard> {
   if (!staff || !staff.is_active || !roleAtLeast(staff.role, min)) {
     return { sb: null, user: null, staff: null, error: "forbidden" };
   }
+  // Record activity recency (best-effort; never block the action on it).
+  await sb
+    .from("shop_staff")
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq("staff_id", staff.staff_id);
   return { sb, user, staff, error: null };
 }
 

@@ -179,6 +179,10 @@ async function currentRole(sb: SupabaseClient): Promise<StaffRole | null> {
 const staffSchema = z.object({
   staff_id: z.string().uuid().nullable().optional(),
   full_name: z.string().trim().min(1).max(200),
+  nickname: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().trim().max(60).nullable().optional(),
+  ),
   email: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().email().max(200).optional(),
@@ -212,6 +216,7 @@ export async function upsertStaff(input: unknown): Promise<SettingsResult> {
 
   const row = {
     full_name: d.full_name,
+    nickname: d.nickname ?? null,
     email: d.email ?? null,
     phone: d.phone || null,
     role: d.role,
@@ -264,6 +269,46 @@ export async function deleteStaff(input: unknown): Promise<SettingsResult> {
   if (e) return { ok: false, error: e.message };
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ---------------------------- Own profile -----------------------------------
+const nicknameSchema = z.object({
+  nickname: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().trim().max(60).nullable(),
+  ),
+});
+
+/** Self-service: any active staff (viewer+) may set their own display nickname. */
+export async function updateOwnProfile(input: unknown): Promise<SettingsResult> {
+  const { sb, error } = await requireActiveStaff();
+  if (error) return { ok: false, error };
+  const p = nicknameSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+
+  const {
+    data: { user },
+  } = await sb!.auth.getUser();
+  if (!user) return { ok: false, error: "unauthorized" };
+
+  const patch = { nickname: p.data.nickname, updated_at: new Date().toISOString() };
+  // Update the caller's own row, matched by user_id (backfilled) then email.
+  let res = await sb!
+    .from("shop_staff")
+    .update(patch)
+    .eq("user_id", user.id)
+    .select("staff_id");
+  if ((!res.data || res.data.length === 0) && user.email) {
+    res = await sb!
+      .from("shop_staff")
+      .update(patch)
+      .eq("email", user.email)
+      .select("staff_id");
+  }
+  if (res.error) return { ok: false, error: res.error.message };
+  if (!res.data || res.data.length === 0) return { ok: false, error: "forbidden" };
+  revalidatePath("/", "layout");
+  return { ok: true, id: res.data[0].staff_id };
 }
 
 // ------------------------------- Password -----------------------------------

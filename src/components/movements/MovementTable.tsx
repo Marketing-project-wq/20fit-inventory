@@ -153,7 +153,7 @@ export function MovementTable({ movements }: { movements: Movement[] }) {
                   {m.notes ?? "—"}
                 </td>
                 <td className="hidden px-4 py-3 text-xs text-muted lg:table-cell">
-                  {m.performed_by_email ?? "—"}
+                  {m.performed_by_name ?? "—"}
                 </td>
               </tr>
             ))}

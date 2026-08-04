@@ -1,17 +1,79 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Mail, KeyRound, Users, Info } from "lucide-react";
-import { changePassword, type SettingsState } from "@/lib/settings-actions";
+import { Mail, KeyRound, Users, Info, Check, Loader2, IdCard } from "lucide-react";
+import {
+  changePassword,
+  updateOwnProfile,
+  type SettingsState,
+} from "@/lib/settings-actions";
 import type { StaffRole } from "@/lib/data";
 import { Field, Alert, inputCls } from "@/components/forms/ui";
 
+function NicknameForm({ nickname }: { nickname: string | null }) {
+  const t = useTranslations("settings");
+  const [value, setValue] = useState(nickname ?? "");
+  const [baseline, setBaseline] = useState((nickname ?? "").trim());
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState(false);
+  const [pending, start] = useTransition();
+  const dirty = value.trim() !== baseline;
+
+  function save() {
+    setErr(false);
+    start(async () => {
+      const res = await updateOwnProfile({ nickname: value });
+      if (!res.ok) {
+        setErr(true);
+        return;
+      }
+      setBaseline(value.trim());
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    });
+  }
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-surface p-5">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
+        <IdCard size={15} className="text-accent" />
+        {t("nicknameTitle")}
+      </h3>
+      {err && <Alert tone="danger">{t("genericError")}</Alert>}
+      <Field label={t("nickname")} hint={t("nicknameHint")}>
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          maxLength={60}
+          placeholder={t("nicknamePlaceholder")}
+          className={inputCls}
+        />
+      </Field>
+      <button
+        type="button"
+        onClick={save}
+        disabled={!dirty || pending}
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+      >
+        {pending ? (
+          <Loader2 size={16} className="animate-spin" />
+        ) : saved ? (
+          <Check size={16} />
+        ) : null}
+        {t("save")}
+      </button>
+    </div>
+  );
+}
+
 export function AccountPanel({
   email,
+  nickname,
   role,
 }: {
   email: string;
+  nickname: string | null;
   role: StaffRole | null;
 }) {
   const t = useTranslations("settings");
@@ -39,6 +101,8 @@ export function AccountPanel({
           )}
         </div>
       </div>
+
+      <NicknameForm nickname={nickname} />
 
       <form
         action={action}
