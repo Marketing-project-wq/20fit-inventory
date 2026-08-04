@@ -1671,3 +1671,26 @@ BEGIN
   END LOOP;
   RETURN v_count;
 END; $function$;
+
+-- ============================================================================
+-- MIGRATION (2026-07): Link staff records to their login accounts.
+-- shop_staff.user_id was unpopulated for some rows, so movement-actor name
+-- resolution couldn't use shop_staff (it falls back to auth.users email).
+-- Backfill each unlinked staff row from auth.users by EXACT (case-insensitive)
+-- email match only — no fuzzy matching — and add a partial unique guard so two
+-- staff rows can never point at the same login account. Applied to the live DB;
+-- kept here idempotently.
+-- ============================================================================
+
+-- Guard first (safe to create before/after the backfill): one login account
+-- maps to at most one staff row. Partial so multiple unlinked (NULL) rows coexist.
+CREATE UNIQUE INDEX IF NOT EXISTS shop_staff_user_id_key
+  ON shop_staff (user_id) WHERE user_id IS NOT NULL;
+
+-- Backfill: exact email match only, and only rows still unlinked (idempotent —
+-- a no-op once linked or when no matching auth account exists).
+UPDATE shop_staff s
+SET user_id = u.id, updated_at = now()
+FROM auth.users u
+WHERE s.user_id IS NULL
+  AND lower(btrim(s.email)) = lower(btrim(u.email));
