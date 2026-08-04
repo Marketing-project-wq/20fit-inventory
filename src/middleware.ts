@@ -51,6 +51,7 @@ export async function middleware(request: NextRequest) {
   // request/confirm pages, and the callback that exchanges the reset code.
   const publicAuthPaths = new Set([
     `/${locale}/login`,
+    `/${locale}/daftar`,
     `/${locale}/lupa-sandi`,
     `/${locale}/reset-sandi`,
     `/${locale}/auth/callback`,

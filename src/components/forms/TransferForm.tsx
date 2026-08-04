@@ -4,21 +4,20 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Camera, X } from "lucide-react";
 import { recordTransfer, type ActionState } from "@/lib/actions";
-import { SalesStaffSelect } from "@/components/ui/SalesStaffSelect";
+import { ResponsiblePersonField } from "@/components/ui/ResponsiblePersonField";
 import { Field, Alert, inputCls } from "./ui";
 
 type Opt = { variant_id: string; sku_code: string; product_name: string };
 type Loc = { location_id: string; name: string };
-type Sales = { staff_id: string; name: string };
 
 export function TransferForm({
   skus,
   locations,
-  salesStaff,
+  defaultResponsible,
 }: {
   skus: Opt[];
   locations: Loc[];
-  salesStaff: Sales[];
+  defaultResponsible: string;
 }) {
   const t = useTranslations("form");
   const tc = useTranslations("common");
@@ -113,7 +112,11 @@ export function TransferForm({
         </Field>
       </div>
 
-      <SalesStaffSelect staff={salesStaff} label={tt("salesPerson")} />
+      <ResponsiblePersonField
+        defaultName={defaultResponsible}
+        label={tc("responsibleName")}
+        hint={tc("responsibleHint")}
+      />
 
       {/* Proof photo (optional) */}
       <div>

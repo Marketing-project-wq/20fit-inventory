@@ -1,7 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import { format } from "date-fns";
 import { Info, ArrowRight } from "lucide-react";
-import { getSnapshot, getSalesStaff, getRecentTransfers } from "@/lib/data";
+import {
+  getSnapshot,
+  getCurrentDisplayName,
+  getRecentTransfers,
+} from "@/lib/data";
 import { TransferForm } from "@/components/forms/TransferForm";
 import { PhotoThumb } from "@/components/ui/PhotoThumb";
 
@@ -13,8 +17,8 @@ export default async function TransferPage() {
   const tc = await getTranslations("common");
   const td = await getTranslations("dashboard");
   const snap = await getSnapshot();
-  const [salesStaff, recent] = await Promise.all([
-    getSalesStaff(),
+  const [defaultResponsible, recent] = await Promise.all([
+    getCurrentDisplayName(),
     getRecentTransfers(12),
   ]);
 
@@ -34,7 +38,7 @@ export default async function TransferPage() {
             <TransferForm
               skus={snap.skus}
               locations={snap.locations}
-              salesStaff={salesStaff}
+              defaultResponsible={defaultResponsible}
             />
           </div>
           <div>

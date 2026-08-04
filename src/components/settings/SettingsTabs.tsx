@@ -2,18 +2,16 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import { useTranslations } from "next-intl";
-import { Package, MapPin, UserCog, Users, Contact } from "lucide-react";
+import { Package, MapPin, UserCog, Users } from "lucide-react";
 import { SkuManager } from "./SkuManager";
 import { LocationManager } from "./LocationManager";
 import { UserManagement } from "./UserManagement";
-import { SalesStaffManager } from "./SalesStaffManager";
 import { AccountPanel } from "./AccountPanel";
 import type {
   SkuAdmin,
   LocationAdmin,
   StaffMember,
   StaffRole,
-  SalesStaff,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +29,6 @@ export function SettingsTabs({
   categories,
   brands,
   staff,
-  salesStaff,
   canManageStaff,
   email,
   nickname,
@@ -42,7 +39,6 @@ export function SettingsTabs({
   categories: Opt[];
   brands: Opt[];
   staff: StaffMember[];
-  salesStaff: SalesStaff[];
   canManageStaff: boolean;
   email: string;
   nickname: string | null;
@@ -50,8 +46,8 @@ export function SettingsTabs({
 }) {
   const t = useTranslations("settings");
 
-  // Admins manage catalog / locations / users / sales staff. Everyone else only
-  // gets their own Account tab (self-service: nickname + password).
+  // Admins manage catalog / locations / users. Everyone else only gets their own
+  // Account tab (self-service: nickname + password).
   const isAdmin = canManageStaff;
 
   if (!isAdmin) {
@@ -85,10 +81,6 @@ export function SettingsTabs({
           <Users size={15} />
           {t("tabUsers")}
         </Tabs.Trigger>
-        <Tabs.Trigger value="salesStaff" className={triggerCls}>
-          <Contact size={15} />
-          {t("salesStaff")}
-        </Tabs.Trigger>
         <Tabs.Trigger value="account" className={triggerCls}>
           <UserCog size={15} />
           {t("tabAccount")}
@@ -103,9 +95,6 @@ export function SettingsTabs({
       </Tabs.Content>
       <Tabs.Content value="staff" className="focus:outline-none">
         <UserManagement staff={staff} currentUserRole={role} />
-      </Tabs.Content>
-      <Tabs.Content value="salesStaff" className="focus:outline-none">
-        <SalesStaffManager staff={salesStaff} />
       </Tabs.Content>
       <Tabs.Content value="account" className="focus:outline-none">
         <AccountPanel email={email} nickname={nickname} role={role} />

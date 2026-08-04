@@ -19,7 +19,20 @@ export function LoginForm({ locale, next }: { locale: string; next: string }) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <AuthShell subtitle={t("subtitle")}>
+    <AuthShell
+      subtitle={t("subtitle")}
+      footer={
+        <span>
+          {t("noAccount")}{" "}
+          <Link
+            href="/daftar"
+            className="font-medium text-accent transition-colors hover:underline"
+          >
+            {t("signUp")}
+          </Link>
+        </span>
+      }
+    >
       <form action={action} className="space-y-4">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="next" value={next} />

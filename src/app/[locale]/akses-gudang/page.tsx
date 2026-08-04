@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { format } from "date-fns";
 import { Info, DoorOpen, LogOut, Clock } from "lucide-react";
-import { getAccessLogs, getLocations, getSalesStaff } from "@/lib/data";
+import { getAccessLogs, getLocations, getCurrentDisplayName } from "@/lib/data";
 import { checkOutAccess } from "@/lib/actions";
 import { CheckInForm } from "@/components/access/CheckInForm";
 import type { AccessLog } from "@/lib/data";
@@ -32,10 +32,10 @@ export default async function AksesGudangPage({
   const t = await getTranslations("access");
   const td = await getTranslations("dashboard");
 
-  const [logs, locationsRaw, salesStaff] = await Promise.all([
+  const [logs, locationsRaw, defaultResponsible] = await Promise.all([
     getAccessLogs(100),
     getLocations(),
-    getSalesStaff(),
+    getCurrentDisplayName(),
   ]);
   const locations = locationsRaw ?? [];
   const now = Date.now();
@@ -61,7 +61,7 @@ export default async function AksesGudangPage({
           {/* Check-in */}
           <div>
             <h2 className="mb-3 text-sm font-semibold text-muted">{t("newVisit")}</h2>
-            <CheckInForm locations={locations} salesStaff={salesStaff} />
+            <CheckInForm locations={locations} defaultResponsible={defaultResponsible} />
           </div>
 
           {/* Currently inside + history */}
