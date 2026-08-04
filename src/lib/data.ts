@@ -373,42 +373,6 @@ export type AccessLog = {
   check_out_at: string | null;
 };
 
-/** Active sales staff for the Transfer / Warehouse Access dropdowns. */
-export type SalesStaffOption = { staff_id: string; name: string };
-
-export async function getSalesStaff(): Promise<SalesStaffOption[]> {
-  const sb = await createSupabaseServerClient();
-  if (!sb) return [];
-  const { data, error } = await sb
-    .from("shop_sales_staff")
-    .select("staff_id,name")
-    .eq("is_active", true)
-    .order("sort_order")
-    .order("name");
-  if (error) return [];
-  return data ?? [];
-}
-
-/** Full sales-staff registry for the Settings → Sales Staff tab. */
-export type SalesStaff = {
-  staff_id: string;
-  name: string;
-  is_active: boolean;
-  sort_order: number;
-};
-
-export async function getSalesStaffAdmin(): Promise<SalesStaff[] | null> {
-  const sb = await createSupabaseServerClient();
-  if (!sb) return null;
-  const { data, error } = await sb
-    .from("shop_sales_staff")
-    .select("staff_id,name,is_active,sort_order")
-    .order("sort_order")
-    .order("name");
-  if (error) return null;
-  return data ?? [];
-}
-
 /** Locations for select inputs (lightweight). */
 export async function getLocations(): Promise<
   { location_id: string; name: string }[] | null
@@ -836,6 +800,27 @@ export async function getCurrentStaff(): Promise<{
   }
   const role = row && row.is_active ? (row.role as StaffRole) : null;
   return { email, nickname: row?.nickname ?? null, role };
+}
+
+/** The logged-in user's display name (nickname > full_name > email), for
+ *  pre-filling the "Nama Sales / Penanggung Jawab" field. Empty when unknown. */
+export async function getCurrentDisplayName(): Promise<string> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return "";
+  const {
+    data: { user },
+  } = await sb.auth.getUser();
+  if (!user) return "";
+  const cols = "nickname,full_name";
+  let row = (
+    await sb.from("shop_staff").select(cols).eq("user_id", user.id).maybeSingle()
+  ).data;
+  if (!row && user.email) {
+    row = (
+      await sb.from("shop_staff").select(cols).eq("email", user.email).maybeSingle()
+    ).data;
+  }
+  return row?.nickname?.trim() || row?.full_name?.trim() || user.email || "";
 }
 
 // ----------------------------- Stock opname --------------------------------

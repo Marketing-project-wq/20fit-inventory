@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
 
 export type ActionState = {
@@ -363,8 +364,11 @@ const transferSchema = z.object({
 });
 
 /**
- * Reads the shared "Nama Sales / Visitor" picker: a real sales_staff_id, or the
- * "other" sentinel meaning a daily worker whose name is typed into dw_name.
+ * Reads the "Nama Sales / Penanggung Jawab" field. The sales-staff picklist has
+ * been retired: new records store the responsible person's name directly in
+ * `dw_name` (pre-filled from the logged-in user, editable — e.g. a daily
+ * worker). A legacy `sales_staff_id` UUID is still honored if one is posted, so
+ * historical references keep resolving.
  */
 function parseSalesSelection(formData: FormData): {
   sales_staff_id: string | null;
@@ -372,9 +376,8 @@ function parseSalesSelection(formData: FormData): {
 } {
   const raw = String(formData.get("sales_staff_id") ?? "").trim();
   const dw = String(formData.get("dw_name") ?? "").trim();
-  if (raw === "other") return { sales_staff_id: null, dw_name: dw || null };
   if (/^[0-9a-fA-F-]{36}$/.test(raw)) return { sales_staff_id: raw, dw_name: null };
-  return { sales_staff_id: null, dw_name: null };
+  return { sales_staff_id: null, dw_name: dw || null };
 }
 
 export async function recordTransfer(
@@ -543,6 +546,89 @@ export async function signIn(
   const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: "invalid_credentials" };
   redirect(next);
+}
+
+const signUpSchema = z.object({
+  full_name: z.string().trim().min(1).max(200),
+  email: z.string().trim().email().max(200),
+  password: z.string().min(8).max(200),
+  nickname: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().trim().max(60).nullable().optional(),
+  ),
+});
+
+const STAFF_DOMAIN = "@20fit.id";
+
+/**
+ * Public self-service sign-up. Creates the auth account via the anon client
+ * (`signUp`, NOT the admin API) so email verification is sent, then provisions a
+ * matching shop_staff row via the service-role client (there is no session yet
+ * when confirmation is required, so RLS-bound inserts would fail):
+ *   - `@20fit.id` email → role `staff`, active (straight into the app once
+ *     verified);
+ *   - any other email  → role `pending`, active but authorized for nothing until
+ *     an admin promotes them (they land on /pending after verifying).
+ * If the staff-row insert fails after the auth account exists, we still report
+ * success: the user can verify + log in and will sit on /pending (no shop_staff
+ * row = no access, per Phase 0), where an admin can create their row manually.
+ */
+export async function signUp(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = signUpSchema.safeParse({
+    full_name: formData.get("full_name"),
+    email: formData.get("email"),
+    password: formData.get("password"),
+    nickname: formData.get("nickname"),
+  });
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const d = parsed.data;
+  const email = d.email.toLowerCase();
+
+  const sb = await createSupabaseServerClient();
+  if (!sb) return { ok: false, error: "not_configured" };
+
+  const origin = await requestOrigin();
+  const locale = String(formData.get("locale") ?? "id");
+  // Send the verification link through the shared auth callback, forwarding to
+  // the app root afterward (the callback defaults `next` to the reset page, so
+  // pass it explicitly). Middleware then routes staff → app, pending → /pending.
+  const next = encodeURIComponent(`/${locale}`);
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password: d.password,
+    options: { emailRedirectTo: `${origin}/${locale}/auth/callback?next=${next}` },
+  });
+  if (error) {
+    if (/password/i.test(error.message))
+      return { ok: false, error: "password_short" };
+    return { ok: false, error: "signup_failed" };
+  }
+
+  // Existing address → Supabase returns an obfuscated user with no identities
+  // (anti-enumeration) and sends no email. Don't provision a staff row; show the
+  // same verify message so we never reveal whether an email is registered.
+  const user = data.user;
+  const isNewUser = Boolean(user && (user.identities?.length ?? 0) > 0);
+  if (user && isNewUser) {
+    const role = email.endsWith(STAFF_DOMAIN) ? "staff" : "pending";
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      await admin.from("shop_staff").insert({
+        full_name: d.full_name,
+        nickname: d.nickname ?? null,
+        email,
+        role,
+        user_id: user.id,
+        is_active: true,
+      });
+      // A failure here is intentionally non-fatal (see the doc comment).
+    }
+  }
+
+  return { ok: true, message: "verify_email" };
 }
 
 export async function signOut(formData: FormData): Promise<void> {
