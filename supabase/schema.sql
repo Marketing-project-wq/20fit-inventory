@@ -1768,3 +1768,32 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION public.shop_staff_last_login() FROM public, anon;
 GRANT EXECUTE ON FUNCTION public.shop_staff_last_login() TO authenticated, service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-08): Phase 2 — admin-provisioned users + forced first-login
+-- password change.
+--   * shop_staff.must_change_password: set true when an admin creates a brand
+--     new auth account with a temporary password. The middleware parks such a
+--     user on the /ganti-sandi screen until they set their own password (see
+--     src/middleware.ts + src/lib/settings-actions.ts changePassword, which
+--     clears the flag). NOT set when an admin "claims" an existing ecosystem
+--     account (that person keeps their own shared-pool credentials).
+--   * shop_find_auth_user(p_email): targeted single-email lookup into the shared
+--     auth.users pool, callable only by service_role (the admin create-user
+--     action), used to decide create-new vs. link-existing. Returns just the id
+--     for the supplied email — never enumerates the 20FIT ecosystem pool.
+-- Applied to the live DB; kept here idempotently.
+-- ============================================================================
+ALTER TABLE public.shop_staff
+  ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+
+CREATE OR REPLACE FUNCTION public.shop_find_auth_user(p_email text)
+RETURNS uuid
+LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
+AS $function$
+  SELECT id FROM auth.users
+  WHERE lower(btrim(email)) = lower(btrim(p_email))
+  LIMIT 1
+$function$;
+REVOKE ALL ON FUNCTION public.shop_find_auth_user(text) FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.shop_find_auth_user(text) TO service_role;

@@ -76,11 +76,15 @@ export async function middleware(request: NextRequest) {
   //    parked on the pending screen; approved users never sit on it.
   const pendingPath = `/${locale}/pending`;
   const isPending = pathname === pendingPath;
+  // Forced first-login password change (admin-provisioned temporary password).
+  const gantiPath = `/${locale}/ganti-sandi`;
+  const isGanti = pathname === gantiPath;
   if (user && !isPublic) {
+    const cols = "role,is_active,must_change_password";
     let row = (
       await supabase
         .from("shop_staff")
-        .select("role,is_active")
+        .select(cols)
         .eq("user_id", user.id)
         .maybeSingle()
     ).data;
@@ -88,13 +92,14 @@ export async function middleware(request: NextRequest) {
       row = (
         await supabase
           .from("shop_staff")
-          .select("role,is_active")
+          .select(cols)
           .eq("email", user.email)
           .maybeSingle()
       ).data;
     }
     const rank = row && row.is_active ? (ROLE_RANK[row.role as StaffRole] ?? -1) : -1;
     const authorized = rank >= ROLE_RANK[APP_ACCESS_MIN];
+    const mustChange = Boolean(row?.is_active && row?.must_change_password);
 
     if (!authorized && !isPending) {
       const redirectUrl = request.nextUrl.clone();
@@ -103,6 +108,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
     if (authorized && isPending) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = `/${locale}`;
+      return NextResponse.redirect(redirectUrl);
+    }
+    // Park an authorized user with a pending forced-change on the change screen
+    // until they set their own password; release them once the flag clears.
+    if (authorized && mustChange && !isGanti) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = gantiPath;
+      redirectUrl.searchParams.delete("next");
+      return NextResponse.redirect(redirectUrl);
+    }
+    if (authorized && !mustChange && isGanti) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = `/${locale}`;
       return NextResponse.redirect(redirectUrl);

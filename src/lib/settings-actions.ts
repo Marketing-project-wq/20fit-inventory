@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "@/lib/import-server";
 import { requireAdmin, requireActiveStaff } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { roleAtLeast, type StaffRole } from "@/lib/roles";
 
 export type SettingsResult = { ok: boolean; error?: string; id?: string };
@@ -271,6 +272,122 @@ export async function deleteStaff(input: unknown): Promise<SettingsResult> {
   return { ok: true };
 }
 
+// -------------------------- Create user account -----------------------------
+export type CreateUserResult = {
+  ok: boolean;
+  error?: string;
+  id?: string;
+  /** True when an existing ecosystem auth account was linked (not newly created). */
+  linked?: boolean;
+};
+
+const createUserSchema = z.object({
+  full_name: z.string().trim().min(1).max(200),
+  nickname: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().trim().max(60).nullable().optional(),
+  ),
+  email: z.string().trim().email().max(200),
+  role: z.enum(["super_admin", "admin", "manager", "staff", "viewer", "pending"]),
+  password: z.string().min(8).max(200),
+});
+
+/** Escape LIKE/ILIKE wildcards so an email is matched literally (e.g. `_`). */
+function likeLiteral(s: string): string {
+  return s.replace(/[\\%_]/g, "\\$&");
+}
+
+/**
+ * Admin-provision a login account. Two paths, distinguished server-side:
+ *   * NEW email → create an auth.users account with the temporary password
+ *     (email pre-confirmed, since the admin is vouching) and flag the staff row
+ *     `must_change_password` so first login forces a real password.
+ *   * Email already in the shared ecosystem pool but NOT a shop staff member →
+ *     "claim": link a staff row to that account WITHOUT touching its credentials
+ *     (the person keeps their shared-pool password; no forced change).
+ *   * Email already a shop staff member → true duplicate, blocked.
+ * super_admin may only be granted by a super_admin (parity with upsertStaff).
+ */
+export async function createUserAccount(input: unknown): Promise<CreateUserResult> {
+  const { sb, error } = await requireUser();
+  if (error) return { ok: false, error };
+  const actor = await currentRole(sb!);
+  if (!roleAtLeast(actor, "admin")) return { ok: false, error: "forbidden" };
+
+  const p = createUserSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "invalid_input" };
+  const d = p.data;
+  if (d.role === "super_admin" && actor !== "super_admin")
+    return { ok: false, error: "forbidden" };
+
+  // Privileged operations (auth admin API + user_id-linked insert) need the
+  // service-role client; the RLS-bound session client cannot create auth users.
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: false, error: "not_configured" };
+
+  const email = d.email.toLowerCase().trim();
+
+  // Already a shop staff member with this email → true duplicate.
+  const { data: existingStaff } = await admin
+    .from("shop_staff")
+    .select("staff_id")
+    .ilike("email", likeLiteral(email))
+    .maybeSingle();
+  if (existingStaff) return { ok: false, error: "user_exists" };
+
+  // Does the email already exist in the shared ecosystem auth pool?
+  const { data: existingId, error: lookupErr } = await admin.rpc(
+    "shop_find_auth_user",
+    { p_email: email },
+  );
+  if (lookupErr) return { ok: false, error: lookupErr.message };
+
+  let userId: string;
+  let mustChange: boolean;
+  let linked: boolean;
+
+  if (existingId) {
+    userId = existingId as string;
+    mustChange = false;
+    linked = true;
+  } else {
+    const created = await admin.auth.admin.createUser({
+      email,
+      password: d.password,
+      email_confirm: true,
+    });
+    if (created.error || !created.data.user) {
+      const msg = created.error?.message ?? "";
+      if (/regist|exist/i.test(msg)) return { ok: false, error: "user_exists" };
+      if (/password/i.test(msg)) return { ok: false, error: "password_short" };
+      if (/email/i.test(msg)) return { ok: false, error: "email_invalid" };
+      return { ok: false, error: msg || "create_failed" };
+    }
+    userId = created.data.user.id;
+    mustChange = true;
+    linked = false;
+  }
+
+  const dupe = (m: string) => (/duplicate|unique/i.test(m) ? "user_exists" : m);
+  const { data: row, error: insErr } = await admin
+    .from("shop_staff")
+    .insert({
+      full_name: d.full_name,
+      nickname: d.nickname ?? null,
+      email,
+      role: d.role,
+      user_id: userId,
+      is_active: true,
+      must_change_password: mustChange,
+    })
+    .select("staff_id")
+    .single();
+  if (insErr) return { ok: false, error: dupe(insErr.message) };
+
+  revalidatePath("/", "layout");
+  return { ok: true, id: row?.staff_id, linked };
+}
+
 // ---------------------------- Own profile -----------------------------------
 const nicknameSchema = z.object({
   nickname: z.preprocess(
@@ -326,6 +443,23 @@ export async function changePassword(
 
   const { error: e } = await sb!.auth.updateUser({ password });
   if (e) return { ok: false, error: "update_failed" };
+
+  // Clear the forced-change flag on the caller's own staff row (matched by
+  // user_id, then email) so the middleware stops parking them on /ganti-sandi.
+  const {
+    data: { user },
+  } = await sb!.auth.getUser();
+  if (user) {
+    const clear = { must_change_password: false, updated_at: new Date().toISOString() };
+    const byId = await sb!
+      .from("shop_staff")
+      .update(clear)
+      .eq("user_id", user.id)
+      .select("staff_id");
+    if ((!byId.data || byId.data.length === 0) && user.email) {
+      await sb!.from("shop_staff").update(clear).eq("email", user.email);
+    }
+  }
   return { ok: true, message: "password_changed" };
 }
 
