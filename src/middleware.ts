@@ -46,9 +46,13 @@ export async function middleware(request: NextRequest) {
   const locale = (routing.locales as readonly string[]).includes(seg)
     ? seg
     : routing.defaultLocale;
-  const isLoginPage = pathname === `/${locale}/login`;
-  // Auth screens reachable without a session: sign-in, the password-reset
-  // request/confirm pages, and the callback that exchanges the reset code.
+  // Entry screens an already-authenticated user should never sit on (they get
+  // bounced into the app): sign-in and sign-up.
+  const isAuthEntryPage =
+    pathname === `/${locale}/login` || pathname === `/${locale}/daftar`;
+  // Auth screens reachable without a session: sign-in, sign-up, the
+  // password-reset request/confirm pages, and the callback that exchanges the
+  // reset code.
   const publicAuthPaths = new Set([
     `/${locale}/login`,
     `/${locale}/daftar`,
@@ -64,7 +68,7 @@ export async function middleware(request: NextRequest) {
     redirectUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(redirectUrl);
   }
-  if (user && isLoginPage) {
+  if (user && isAuthEntryPage) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = `/${locale}`;
     redirectUrl.searchParams.delete("next");
