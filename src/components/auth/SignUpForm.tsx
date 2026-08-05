@@ -66,7 +66,9 @@ export function SignUpForm({ locale }: { locale: string }) {
                 ? t("notConfigured")
                 : state.error === "invalid_input"
                   ? t("invalidInput")
-                  : t("signUpFailed")}
+                  : state.error === "signup_incomplete"
+                    ? t("signupIncomplete")
+                    : t("signUpFailed")}
           </Alert>
         )}
 

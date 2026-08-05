@@ -562,16 +562,21 @@ const STAFF_DOMAIN = "@20fit.id";
 
 /**
  * Public self-service sign-up. Creates the auth account via the anon client
- * (`signUp`, NOT the admin API) so email verification is sent, then provisions a
- * matching shop_staff row via the service-role client (there is no session yet
- * when confirmation is required, so RLS-bound inserts would fail):
- *   - `@20fit.id` email → role `staff`, active (straight into the app once
- *     verified);
+ * (`signUp`, NOT the admin API) so email verification is sent, then reliably
+ * provisions a matching shop_staff row via the service-role client:
+ *   - `@20fit.id` email → role `staff`, active (into the app once verified);
  *   - any other email  → role `pending`, active but authorized for nothing until
  *     an admin promotes them (they land on /pending after verifying).
- * If the staff-row insert fails after the auth account exists, we still report
- * success: the user can verify + log in and will sit on /pending (no shop_staff
- * row = no access, per Phase 0), where an admin can create their row manually.
+ *
+ * The staff row is created in this same call, before verification, so the person
+ * appears in User Management immediately. `auth.users` is a SHARED ecosystem
+ * pool, so the email may already exist there (most @20fit.id staff already have
+ * an account) — in that case `signUp` returns an obfuscated user with no id we
+ * can trust, so we resolve the real id via `shop_find_auth_user` (which works
+ * whether the account was just created or pre-existed) and provision against it.
+ * A pre-existing shop_staff row is left untouched (idempotent). If provisioning
+ * fails after the auth account exists, we surface an error rather than swallow
+ * it, so the user isn't left with app access silently missing.
  */
 export async function signUp(
   _prev: ActionState,
@@ -588,7 +593,8 @@ export async function signUp(
   const email = d.email.toLowerCase();
 
   const sb = await createSupabaseServerClient();
-  if (!sb) return { ok: false, error: "not_configured" };
+  const admin = createSupabaseAdminClient();
+  if (!sb || !admin) return { ok: false, error: "not_configured" };
 
   const origin = await requestOrigin();
   const locale = String(formData.get("locale") ?? "id");
@@ -596,35 +602,56 @@ export async function signUp(
   // the app root afterward (the callback defaults `next` to the reset page, so
   // pass it explicitly). Middleware then routes staff → app, pending → /pending.
   const next = encodeURIComponent(`/${locale}`);
-  const { data, error } = await sb.auth.signUp({
+  const { error: signUpErr } = await sb.auth.signUp({
     email,
     password: d.password,
     options: { emailRedirectTo: `${origin}/${locale}/auth/callback?next=${next}` },
   });
-  if (error) {
-    if (/password/i.test(error.message))
+  if (signUpErr) {
+    if (/password/i.test(signUpErr.message))
       return { ok: false, error: "password_short" };
+    console.error(`[signUp] auth.signUp failed for ${email}:`, signUpErr.message);
     return { ok: false, error: "signup_failed" };
   }
 
-  // Existing address → Supabase returns an obfuscated user with no identities
-  // (anti-enumeration) and sends no email. Don't provision a staff row; show the
-  // same verify message so we never reveal whether an email is registered.
-  const user = data.user;
-  const isNewUser = Boolean(user && (user.identities?.length ?? 0) > 0);
-  if (user && isNewUser) {
+  // Resolve the real auth user id. `signUp` obfuscates the id when the email
+  // already exists in the shared pool, so trust this lookup instead.
+  const { data: userId, error: lookupErr } = await admin.rpc(
+    "shop_find_auth_user",
+    { p_email: email },
+  );
+  if (lookupErr || !userId) {
+    console.error(
+      `[signUp] could not resolve auth user for ${email}:`,
+      lookupErr?.message ?? "no id returned",
+    );
+    return { ok: false, error: "signup_incomplete" };
+  }
+
+  // Provision the shop_staff row if this user doesn't already have one (matched
+  // by user_id, then email — wildcards escaped for a literal match).
+  const emailPat = email.replace(/[\\%_]/g, "\\$&");
+  let existing = (
+    await admin.from("shop_staff").select("staff_id").eq("user_id", userId).maybeSingle()
+  ).data;
+  if (!existing) {
+    existing = (
+      await admin.from("shop_staff").select("staff_id").ilike("email", emailPat).maybeSingle()
+    ).data;
+  }
+  if (!existing) {
     const role = email.endsWith(STAFF_DOMAIN) ? "staff" : "pending";
-    const admin = createSupabaseAdminClient();
-    if (admin) {
-      await admin.from("shop_staff").insert({
-        full_name: d.full_name,
-        nickname: d.nickname ?? null,
-        email,
-        role,
-        user_id: user.id,
-        is_active: true,
-      });
-      // A failure here is intentionally non-fatal (see the doc comment).
+    const { error: insErr } = await admin.from("shop_staff").insert({
+      full_name: d.full_name,
+      nickname: d.nickname ?? null,
+      email,
+      role,
+      user_id: userId,
+      is_active: true,
+    });
+    if (insErr) {
+      console.error(`[signUp] shop_staff insert failed for ${email}:`, insErr.message);
+      return { ok: false, error: "signup_incomplete" };
     }
   }
 
