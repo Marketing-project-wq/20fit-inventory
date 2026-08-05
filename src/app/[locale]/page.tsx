@@ -11,14 +11,26 @@ import {
   QrCode,
   ClipboardCheck,
   Info,
+  Boxes,
+  Wallet,
+  TrendingUp,
+  Percent,
+  ArrowUp,
+  ArrowDown,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { cn, formatIDR } from "@/lib/utils";
-import { getDashboard, getTrendMovements } from "@/lib/data";
-import { movementTrend, weekOfMonthTrend } from "@/lib/reports";
+import { getDashboard, getTrendMovements, getSalesReport } from "@/lib/data";
+import {
+  movementTrend,
+  weekOfMonthTrend,
+  salesAggregate,
+  wibMonthRange,
+} from "@/lib/reports";
 import { StockBadge, MovementBadge, MOVEMENT_KEY } from "@/components/badges";
 import { MovementTrendChart } from "@/components/dashboard/MovementTrendChart";
+import { DashboardSalesChart } from "@/components/dashboard/DashboardSalesChart";
 
 type Tone = "accent" | "warning" | "danger" | "success";
 const toneText: Record<Tone, string> = {
@@ -29,6 +41,29 @@ const toneText: Record<Tone, string> = {
 };
 const statusKey = { ok: "inStock", low: "lowStock", out: "outOfStock" } as const;
 
+const num = new Intl.NumberFormat("id-ID");
+
+// Month-over-month change indicator. `dir` drives the arrow + color;
+// "none" (no prior-month data, or a flat value) shows neutral/gray, no arrow.
+type Delta = { label: string; dir: "up" | "down" | "none" };
+
+/** Percentage change vs last month. A non-positive base (no/zero last month, or
+ *  a negative prior profit — where a % would mislead) yields a neutral delta. */
+function pctDelta(cur: number, prev: number): Delta {
+  if (prev <= 0) return { label: "", dir: "none" };
+  const pct = ((cur - prev) / prev) * 100;
+  if (Math.abs(pct) < 0.05) return { label: "0%", dir: "none" };
+  return { label: `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%`, dir: pct > 0 ? "up" : "down" };
+}
+
+/** Percentage-point change for margin (only meaningful when last month had sales). */
+function ppDelta(cur: number, prev: number, hasPrev: boolean): Delta {
+  if (!hasPrev) return { label: "", dir: "none" };
+  const pp = cur - prev;
+  if (Math.abs(pp) < 0.05) return { label: "0 pp", dir: "none" };
+  return { label: `${pp > 0 ? "+" : ""}${pp.toFixed(1)} pp`, dir: pp > 0 ? "up" : "down" };
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -37,11 +72,66 @@ export default async function DashboardPage() {
   const tp = await getTranslations("product");
   const ts = await getTranslations("stock");
   const tm = await getTranslations("movement");
+  const tsr = await getTranslations("salesReport");
 
-  const data = await getDashboard();
-  const trendRows = await getTrendMovements();
+  // Sales performance uses the same getSalesReport + salesAggregate infra as the
+  // Sales Report page: current WIB month (1st → today) vs the full previous month
+  // for month-over-month deltas. Fetch both alongside the inventory data.
+  const curMonth = wibMonthRange(0);
+  const prevMonth = wibMonthRange(1);
+  const [data, trendRows, curRows, prevRows] = await Promise.all([
+    getDashboard(),
+    getTrendMovements(),
+    getSalesReport({ from: curMonth.from, to: curMonth.to }),
+    getSalesReport({ from: prevMonth.from, to: prevMonth.to }),
+  ]);
   const trendMonth = trendRows ? movementTrend(trendRows, "month") : [];
   const trendWeeks = trendRows ? weekOfMonthTrend(trendRows) : {};
+
+  const curSales = curRows ? salesAggregate(curRows, curMonth.days) : null;
+  const prevSales = prevRows ? salesAggregate(prevRows, prevMonth.days) : null;
+  const cur = curSales?.summary;
+  const prev = prevSales?.summary;
+  const hasPrevSales = !!prev && prev.revenue > 0;
+
+  const salesCards: {
+    label: string;
+    value: string;
+    icon: LucideIcon;
+    tone: string;
+    delta: Delta;
+  }[] = cur
+    ? [
+        {
+          label: tsr("unitsSold"),
+          value: num.format(cur.units),
+          icon: Boxes,
+          tone: "text-accent",
+          delta: pctDelta(cur.units, prev?.units ?? 0),
+        },
+        {
+          label: tsr("estRevenue"),
+          value: formatIDR(cur.revenue),
+          icon: Wallet,
+          tone: "text-success",
+          delta: pctDelta(cur.revenue, prev?.revenue ?? 0),
+        },
+        {
+          label: tsr("estProfit"),
+          value: formatIDR(cur.profit),
+          icon: TrendingUp,
+          tone: cur.profit >= 0 ? "text-success" : "text-danger",
+          delta: pctDelta(cur.profit, prev?.profit ?? 0),
+        },
+        {
+          label: tsr("grossMargin"),
+          value: `${cur.marginPct.toFixed(1)}%`,
+          icon: Percent,
+          tone: "text-accent",
+          delta: ppDelta(cur.marginPct, prev?.marginPct ?? 0, hasPrevSales),
+        },
+      ]
+    : [];
 
   const kpis: { label: string; value: string; icon: LucideIcon; tone: Tone }[] = [
     {
@@ -141,6 +231,102 @@ export default async function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* Sales performance (this month, estimated at catalog prices) */}
+      {data && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted">
+            {t("salesPerformance")}
+          </h2>
+
+          {/* Summary cards with month-over-month deltas */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {salesCards.map((c) => (
+              <div
+                key={c.label}
+                className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface p-4 sm:p-5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm text-muted">{c.label}</span>
+                  <c.icon size={18} className={cn("shrink-0", c.tone)} />
+                </div>
+                <div className="mt-3 truncate font-mono text-xl font-bold whitespace-nowrap text-fg sm:text-2xl">
+                  {c.value}
+                </div>
+                {c.delta.label ? (
+                  <div className="mt-1.5 flex items-center gap-1 text-xs font-medium">
+                    {c.delta.dir === "up" && (
+                      <ArrowUp size={13} className="shrink-0 text-success" />
+                    )}
+                    {c.delta.dir === "down" && (
+                      <ArrowDown size={13} className="shrink-0 text-danger" />
+                    )}
+                    <span
+                      className={cn(
+                        c.delta.dir === "up"
+                          ? "text-success"
+                          : c.delta.dir === "down"
+                            ? "text-danger"
+                            : "text-dim",
+                      )}
+                    >
+                      {c.delta.label}
+                    </span>
+                    <span className="font-normal text-dim">{t("vsLastMonth")}</span>
+                  </div>
+                ) : (
+                  <div className="mt-1.5 text-xs text-dim">{t("noPriorData")}</div>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="-mt-2 text-xs text-dim">{tsr("estimatedNote")}</p>
+
+          {/* Daily sales trend + top 5 products */}
+          <div className="grid gap-4 lg:grid-cols-5">
+            <div className="lg:col-span-3">
+              <DashboardSalesChart series={curSales?.series ?? []} />
+            </div>
+            <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
+              <h3 className="text-sm font-semibold text-fg">{t("topProducts")}</h3>
+              <div className="mt-4 overflow-hidden">
+                {curSales && curSales.topSkus.length > 0 ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted">
+                        <th className="pb-2 font-medium">{tp("skuCode")}</th>
+                        <th className="pb-2 font-medium">{tp("productName")}</th>
+                        <th className="pb-2 text-right font-medium">{tsr("units")}</th>
+                        <th className="pb-2 text-right font-medium">{tsr("revenue")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {curSales.topSkus.slice(0, 5).map((s) => (
+                        <tr key={s.sku_code} className="border-t border-border">
+                          <td className="py-2">
+                            <span className="sku text-xs">{s.sku_code}</span>
+                          </td>
+                          <td className="py-2 pr-2 text-muted">{s.product_name}</td>
+                          <td className="py-2 text-right font-mono">
+                            {num.format(s.units)}
+                          </td>
+                          <td className="py-2 pl-2 text-right font-mono whitespace-nowrap">
+                            {formatIDR(s.revenue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="flex items-center justify-center rounded-lg border border-dashed border-border py-10 text-sm text-muted">
+                    {t("noSalesData")}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Activity trend */}
       {data && <MovementTrendChart month={trendMonth} weeksByMonth={trendWeeks} />}

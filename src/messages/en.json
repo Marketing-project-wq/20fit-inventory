@@ -38,7 +38,13 @@
     "activityTrend": "Stock Activity Trend",
     "perWeek": "Per Week",
     "perMonth": "Per Month",
-    "week": "Week"
+    "week": "Week",
+    "salesPerformance": "Sales Performance — This Month",
+    "salesTrendTitle": "Daily Sales This Month",
+    "topProducts": "Top 5 Products",
+    "vsLastMonth": "vs last month",
+    "noPriorData": "No sales last month",
+    "noSalesData": "No sales recorded this month"
   },
   "product": {
     "skuCode": "SKU Code",
