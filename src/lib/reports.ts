@@ -1,4 +1,4 @@
-import type { Sku, RawMovement } from "./data";
+import type { Sku, RawMovement, SaleRow } from "./data";
 
 const INBOUND = new Set([
   "purchase_receipt",
@@ -290,4 +290,183 @@ export function movers(
     .slice(0, 10);
   const slow = [...rows].sort((a, b) => a.sold - b.sold).slice(0, 10);
   return { fast, slow };
+}
+
+// ============================ Sales report =================================
+// The business operates in WIB (Asia/Jakarta, UTC+7, no DST). All period
+// boundaries and time-series buckets below are computed in WIB by shifting the
+// stored UTC instant +7h, then reading its UTC fields as WIB wall-clock. (The
+// older reports above intentionally bucket in UTC and are left as-is.)
+const WIB_OFFSET = 7 * 60 * 60 * 1000;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const ymd = (y: number, m: number, d: number) => `${y}-${pad2(m + 1)}-${pad2(d)}`;
+
+export type SalesPeriod = { from: string; to: string; days: number };
+
+/**
+ * Resolve a preset (today / week / month / year) or a custom from/to pair into a
+ * concrete inclusive WIB date range plus its length in days. Falls back to the
+ * current WIB month for an unknown preset or an invalid custom range.
+ */
+export function resolveSalesPeriod(
+  preset: string,
+  from?: string,
+  to?: string,
+): SalesPeriod {
+  const nowWib = new Date(Date.now() + WIB_OFFSET);
+  const y = nowWib.getUTCFullYear();
+  const mo = nowWib.getUTCMonth();
+  const da = nowWib.getUTCDate();
+  const today = ymd(y, mo, da);
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+
+  let f = ymd(y, mo, 1);
+  let t = today;
+  switch (preset) {
+    case "today":
+      f = today;
+      break;
+    case "week": {
+      const dow = (nowWib.getUTCDay() + 6) % 7; // Monday = 0
+      const mon = new Date(Date.UTC(y, mo, da - dow));
+      f = ymd(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate());
+      break;
+    }
+    case "year":
+      f = ymd(y, 0, 1);
+      break;
+    case "custom":
+      if (from && re.test(from) && to && re.test(to)) {
+        f = from;
+        t = to;
+      }
+      break;
+    // "month" and anything unexpected use the default (current month).
+  }
+  if (Date.parse(`${f}T00:00:00Z`) > Date.parse(`${t}T00:00:00Z`)) [f, t] = [t, f];
+  const days =
+    Math.round(
+      (Date.parse(`${t}T00:00:00Z`) - Date.parse(`${f}T00:00:00Z`)) / DAY,
+    ) + 1;
+  return { from: f, to: t, days };
+}
+
+export type SalesSummary = {
+  units: number;
+  saleCount: number;
+  revenue: number;
+  cogs: number;
+  profit: number;
+  marginPct: number;
+};
+export type ChannelStat = { channel: string; units: number; revenue: number };
+export type CategoryStat = { category: string; units: number; revenue: number };
+export type SalesPoint = { period: string; label: string; revenue: number; units: number };
+export type SkuStat = {
+  sku_code: string;
+  product_name: string;
+  units: number;
+  revenue: number;
+};
+export type SalesReportData = {
+  summary: SalesSummary;
+  byChannel: ChannelStat[];
+  byCategory: CategoryStat[];
+  series: SalesPoint[];
+  granularity: "day" | "week" | "month";
+  topSkus: SkuStat[];
+};
+
+/**
+ * Aggregate sale unit-lines into summary totals, per-channel and per-category
+ * breakdowns, a WIB-bucketed time series, and top SKUs. Revenue/COGS are
+ * estimated from catalog prices already carried on each row. Bucket granularity
+ * follows the range length: day ≤ 60d, week ≤ 365d, month beyond.
+ */
+export function salesAggregate(rows: SaleRow[], rangeDays: number): SalesReportData {
+  const granularity: "day" | "week" | "month" =
+    rangeDays <= 60 ? "day" : rangeDays <= 365 ? "week" : "month";
+
+  let units = 0;
+  let revenue = 0;
+  let cogs = 0;
+  const chan = new Map<string, ChannelStat>();
+  const cat = new Map<string, CategoryStat>();
+  const sku = new Map<string, SkuStat>();
+  const series = new Map<string, SalesPoint & { sort: number }>();
+
+  for (const r of rows) {
+    const rev = (r.selling_price ?? 0) * r.quantity;
+    const cost = (r.cost_price ?? 0) * r.quantity;
+    units += r.quantity;
+    revenue += rev;
+    cogs += cost;
+
+    const ch = r.sales_channel || "other";
+    const cs = chan.get(ch) ?? { channel: ch, units: 0, revenue: 0 };
+    cs.units += r.quantity;
+    cs.revenue += rev;
+    chan.set(ch, cs);
+
+    const cn = r.category || "—";
+    const ct = cat.get(cn) ?? { category: cn, units: 0, revenue: 0 };
+    ct.units += r.quantity;
+    ct.revenue += rev;
+    cat.set(cn, ct);
+
+    const sk =
+      sku.get(r.sku_code) ??
+      { sku_code: r.sku_code, product_name: r.product_name, units: 0, revenue: 0 };
+    sk.units += r.quantity;
+    sk.revenue += rev;
+    sku.set(r.sku_code, sk);
+
+    const w = new Date(new Date(r.performed_at).getTime() + WIB_OFFSET);
+    let key: string;
+    let label: string;
+    let sort: number;
+    if (granularity === "month") {
+      const wy = w.getUTCFullYear();
+      const wm = w.getUTCMonth();
+      key = `${wy}-${pad2(wm + 1)}`;
+      label = `${MON[wm]} ${String(wy).slice(2)}`;
+      sort = wy * 12 + wm;
+    } else if (granularity === "week") {
+      const dow = (w.getUTCDay() + 6) % 7;
+      const mon = new Date(
+        Date.UTC(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate() - dow),
+      );
+      key = ymd(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate());
+      label = `${mon.getUTCDate()} ${MON[mon.getUTCMonth()]}`;
+      sort = mon.getTime();
+    } else {
+      key = ymd(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate());
+      label = `${w.getUTCDate()} ${MON[w.getUTCMonth()]}`;
+      sort = Date.parse(`${key}T00:00:00Z`);
+    }
+    const pt =
+      series.get(key) ?? { period: key, label, revenue: 0, units: 0, sort };
+    pt.revenue += rev;
+    pt.units += r.quantity;
+    series.set(key, pt);
+  }
+
+  const profit = revenue - cogs;
+  const marginPct = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  return {
+    summary: { units, saleCount: rows.length, revenue, cogs, profit, marginPct },
+    byChannel: [...chan.values()].sort((a, b) => b.revenue - a.revenue),
+    byCategory: [...cat.values()].sort((a, b) => b.revenue - a.revenue),
+    series: [...series.values()]
+      .sort((a, b) => a.sort - b.sort)
+      .map((p) => ({
+        period: p.period,
+        label: p.label,
+        revenue: p.revenue,
+        units: p.units,
+      })),
+    granularity,
+    topSkus: [...sku.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10),
+  };
 }

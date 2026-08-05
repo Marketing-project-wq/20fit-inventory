@@ -359,6 +359,100 @@ export async function getReportSource(): Promise<{
   return { skus: snapshot.skus, movements: (data ?? []) as RawMovement[] };
 }
 
+// ---------------------------- Sales report ---------------------------------
+/**
+ * One sold unit-line for the Sales Report. The system stores no per-sale price,
+ * so revenue/profit are ESTIMATED from the variant's current catalog prices
+ * (`selling_price` / `cost_price`) — see the Sales Report page footnote. B2B
+ * deals in particular may differ from catalog, so treat figures as estimates.
+ */
+export type SaleRow = {
+  performed_at: string;
+  sales_channel: string | null;
+  quantity: number;
+  selling_price: number;
+  cost_price: number;
+  sku_code: string;
+  product_name: string;
+  category: string | null;
+};
+
+/**
+ * Sale movements in a WIB date range, joined to catalog prices + category, for
+ * the Sales Report. Filtering (date range, channel, category) is server-side;
+ * `from`/`to` are inclusive WIB calendar days (yyyy-mm-dd) converted to explicit
+ * +07:00 instants so Postgres compares them correctly against the UTC column.
+ */
+export async function getSalesReport(opts: {
+  from: string;
+  to: string;
+  channel?: string;
+  category?: string; // category_id
+}): Promise<SaleRow[] | null> {
+  const sb = await createSupabaseServerClient();
+  if (!sb) return null;
+
+  const [variants, products, categories] = await Promise.all([
+    sb
+      .from("shop_product_variants")
+      .select("variant_id,product_id,sku_code,selling_price,cost_price"),
+    sb.from("shop_products").select("product_id,name,category_id"),
+    sb.from("shop_categories").select("category_id,name"),
+  ]);
+  if (variants.error || products.error) return null;
+
+  const prodById = new Map((products.data ?? []).map((p) => [p.product_id, p]));
+  const catName = new Map((categories.data ?? []).map((c) => [c.category_id, c.name]));
+  const variantById = new Map((variants.data ?? []).map((v) => [v.variant_id, v]));
+
+  // Optional category filter → restrict to that category's variant ids.
+  let variantFilter: string[] | null = null;
+  if (opts.category) {
+    const prodIds = new Set(
+      (products.data ?? [])
+        .filter((p) => p.category_id === opts.category)
+        .map((p) => p.product_id),
+    );
+    variantFilter = (variants.data ?? [])
+      .filter((v) => prodIds.has(v.product_id))
+      .map((v) => v.variant_id);
+    if (variantFilter.length === 0) return [];
+  }
+
+  const fromUtc = `${opts.from}T00:00:00.000+07:00`;
+  const toUtc = `${opts.to}T23:59:59.999+07:00`;
+
+  let q = sb
+    .from("shop_stock_movements")
+    .select("variant_id,quantity,sales_channel,performed_at")
+    .eq("movement_type", "sale")
+    .eq("item_condition", "good")
+    .gte("performed_at", fromUtc)
+    .lte("performed_at", toUtc)
+    .order("performed_at", { ascending: true })
+    .limit(10000);
+  if (opts.channel) q = q.eq("sales_channel", opts.channel);
+  if (variantFilter) q = q.in("variant_id", variantFilter);
+
+  const { data, error } = await q;
+  if (error) return null;
+
+  return (data ?? []).map((m) => {
+    const v = variantById.get(m.variant_id);
+    const p = v ? prodById.get(v.product_id) : undefined;
+    return {
+      performed_at: m.performed_at,
+      sales_channel: m.sales_channel,
+      quantity: m.quantity,
+      selling_price: v?.selling_price ?? 0,
+      cost_price: v?.cost_price ?? 0,
+      sku_code: v?.sku_code ?? "—",
+      product_name: p?.name ?? "—",
+      category: p?.category_id ? (catName.get(p.category_id) ?? null) : null,
+    };
+  });
+}
+
 // -------------------------- Warehouse access -------------------------------
 export type AccessLog = {
   log_id: string;
