@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   DoorOpen,
   BarChart3,
+  TrendingUp,
   ScrollText,
   Settings,
   type LucideIcon,
@@ -28,6 +29,7 @@ export type NavItem = {
     | "stockOpname"
     | "warehouseAccess"
     | "reports"
+    | "salesReport"
     | "activityLog"
     | "settings";
   icon: LucideIcon;
@@ -44,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/stock-opname", key: "stockOpname", icon: ClipboardCheck },
   { href: "/akses-gudang", key: "warehouseAccess", icon: DoorOpen },
   { href: "/laporan", key: "reports", icon: BarChart3 },
+  { href: "/laporan-penjualan", key: "salesReport", icon: TrendingUp },
   { href: "/log-aktivitas", key: "activityLog", icon: ScrollText },
   { href: "/pengaturan", key: "settings", icon: Settings },
 ];
