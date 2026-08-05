@@ -1797,3 +1797,46 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION public.shop_find_auth_user(text) FROM public, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.shop_find_auth_user(text) TO service_role;
+
+-- ============================================================================
+-- MIGRATION (2026-08): Custom sign-up email verification.
+-- Supabase's built-in verification email carries another app's branding in this
+-- shared project, so we verify sign-ups ourselves with a branded 6-digit OTP
+-- (same pattern as password reset) sent via Mailtrap. shop_staff.email_verified
+-- gates app access (see src/middleware.ts); the OTP lives in a dedicated table
+-- mirroring shop_password_reset_otps. Public sign-up creates the account
+-- already-confirmed in Supabase (admin API, no Supabase email) with
+-- email_verified=false; admin-provisioned users are auto-verified. Applied to
+-- the live DB; kept here idempotently.
+-- ============================================================================
+
+-- Default true so existing rows and admin-provisioned users (admin vouches) are
+-- verified; only public self-sign-up sets it false explicitly.
+ALTER TABLE public.shop_staff
+  ADD COLUMN IF NOT EXISTS email_verified boolean NOT NULL DEFAULT true;
+
+CREATE TABLE IF NOT EXISTS shop_email_verification_otps (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       TEXT NOT NULL,
+  code_hash   TEXT NOT NULL,            -- bcrypt hash of the 6-digit code (never plaintext)
+  used        BOOLEAN NOT NULL DEFAULT false,
+  expires_at  TIMESTAMPTZ NOT NULL,     -- now() + 10 min
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  ip_address  TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_shop_email_verify_email
+  ON shop_email_verification_otps(email, used, expires_at);
+
+-- Service-role only: RLS on + zero policies denies anon/authenticated entirely.
+ALTER TABLE shop_email_verification_otps ENABLE ROW LEVEL SECURITY;
+
+-- Extend OTP cleanup to prune the verification table too (same 1-hour retention).
+CREATE OR REPLACE FUNCTION shop_cleanup_expired_otps() RETURNS void
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  DELETE FROM shop_password_reset_otps      WHERE expires_at < now() - INTERVAL '1 hour';
+  DELETE FROM shop_otp_ip_requests          WHERE created_at < now() - INTERVAL '1 hour';
+  DELETE FROM shop_email_verification_otps  WHERE expires_at < now() - INTERVAL '1 hour';
+$$;
+REVOKE ALL ON FUNCTION shop_cleanup_expired_otps() FROM public, anon, authenticated;
+GRANT EXECUTE ON FUNCTION shop_cleanup_expired_otps() TO service_role;

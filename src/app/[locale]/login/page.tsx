@@ -8,10 +8,12 @@ export default async function LoginPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; verified?: string }>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const { next } = await searchParams;
-  return <LoginForm locale={locale} next={next ?? ""} />;
+  const { next, verified } = await searchParams;
+  return (
+    <LoginForm locale={locale} next={next ?? ""} verified={verified === "1"} />
+  );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Eye, EyeOff, MailCheck } from "lucide-react";
-import { Link } from "@/i18n/navigation";
+import { Eye, EyeOff } from "lucide-react";
+import { Link, useRouter } from "@/i18n/navigation";
 import { signUp, type ActionState } from "@/lib/actions";
 import { inputCls, Field, Alert } from "@/components/forms/ui";
 import { cn } from "@/lib/utils";
@@ -12,29 +12,25 @@ import { AuthShell } from "./AuthShell";
 export function SignUpForm({ locale }: { locale: string }) {
   const t = useTranslations("auth");
   const tc = useTranslations("common");
+  const router = useRouter();
   const [state, action, pending] = useActionState<ActionState, FormData>(
     signUp,
     null,
   );
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
 
-  // Email verification is on — after a successful sign-up we ask the user to
-  // confirm their address before logging in.
-  if (state?.ok && state.message === "verify_email") {
+  // On success the account exists but is unverified — send the user to the
+  // verification screen to enter the branded code we just emailed.
+  const goVerify = state?.ok && state.message === "verify_email";
+  useEffect(() => {
+    if (goVerify) router.replace(`/verifikasi-email?email=${encodeURIComponent(email)}`);
+  }, [goVerify, email, router]);
+
+  if (goVerify) {
     return (
-      <AuthShell title={t("signUpTitle")}>
-        <div className="flex flex-col items-center gap-4 py-2 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-success/15 text-success">
-            <MailCheck size={22} />
-          </span>
-          <p className="text-sm text-fg/90">{t("verifyEmailMessage")}</p>
-          <Link
-            href="/login"
-            className="inline-flex w-full items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            {t("signIn")}
-          </Link>
-        </div>
+      <AuthShell title={t("signUpTitle")} subtitle={tc("loading")}>
+        <div className="py-6" />
       </AuthShell>
     );
   }
@@ -66,9 +62,17 @@ export function SignUpForm({ locale }: { locale: string }) {
                 ? t("notConfigured")
                 : state.error === "invalid_input"
                   ? t("invalidInput")
-                  : state.error === "signup_incomplete"
-                    ? t("signupIncomplete")
-                    : t("signUpFailed")}
+                  : state.error === "email_invalid"
+                    ? t("emailInvalid")
+                    : state.error === "already_registered"
+                      ? t("alreadyRegistered")
+                      : state.error === "rate_limited"
+                        ? t("otpRateLimited")
+                        : state.error === "email_send_failed"
+                          ? t("emailSendFailed")
+                          : state.error === "signup_incomplete"
+                            ? t("signupIncomplete")
+                            : t("signUpFailed")}
           </Alert>
         )}
 
@@ -100,6 +104,8 @@ export function SignUpForm({ locale }: { locale: string }) {
             autoComplete="email"
             required
             maxLength={200}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className={inputCls}
           />
         </Field>

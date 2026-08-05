@@ -56,6 +56,7 @@ export async function middleware(request: NextRequest) {
   const publicAuthPaths = new Set([
     `/${locale}/login`,
     `/${locale}/daftar`,
+    `/${locale}/verifikasi-email`,
     `/${locale}/lupa-sandi`,
     `/${locale}/reset-sandi`,
     `/${locale}/auth/callback`,
@@ -84,8 +85,10 @@ export async function middleware(request: NextRequest) {
   // Forced first-login password change (admin-provisioned temporary password).
   const gantiPath = `/${locale}/ganti-sandi`;
   const isGanti = pathname === gantiPath;
+  // Custom sign-up email verification (self-service sign-ups only).
+  const verifyPath = `/${locale}/verifikasi-email`;
   if (user && !isPublic) {
-    const cols = "role,is_active,must_change_password";
+    const cols = "role,is_active,must_change_password,email_verified";
     let row = (
       await supabase
         .from("shop_staff")
@@ -105,6 +108,9 @@ export async function middleware(request: NextRequest) {
     const rank = row && row.is_active ? (ROLE_RANK[row.role as StaffRole] ?? -1) : -1;
     const authorized = rank >= ROLE_RANK[APP_ACCESS_MIN];
     const mustChange = Boolean(row?.is_active && row?.must_change_password);
+    // email_verified defaults true for existing/admin rows; only self-sign-ups
+    // are false. Treat a missing column value as verified (fail-open on read).
+    const needsVerify = Boolean(row?.is_active && row?.email_verified === false);
 
     if (!authorized && !isPending) {
       const redirectUrl = request.nextUrl.clone();
@@ -128,6 +134,15 @@ export async function middleware(request: NextRequest) {
     if (authorized && !mustChange && isGanti) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = `/${locale}`;
+      return NextResponse.redirect(redirectUrl);
+    }
+    // Unverified self-sign-up: park on the email-verification screen (carrying
+    // the email to prefill) until they enter their code.
+    if (authorized && !mustChange && needsVerify) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = verifyPath;
+      redirectUrl.search = "";
+      if (user.email) redirectUrl.searchParams.set("email", user.email);
       return NextResponse.redirect(redirectUrl);
     }
   }

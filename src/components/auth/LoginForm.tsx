@@ -9,7 +9,15 @@ import { inputCls, Field, Alert } from "@/components/forms/ui";
 import { cn } from "@/lib/utils";
 import { AuthShell } from "./AuthShell";
 
-export function LoginForm({ locale, next }: { locale: string; next: string }) {
+export function LoginForm({
+  locale,
+  next,
+  verified = false,
+}: {
+  locale: string;
+  next: string;
+  verified?: boolean;
+}) {
   const t = useTranslations("auth");
   const tc = useTranslations("common");
   const [state, action, pending] = useActionState<ActionState, FormData>(
@@ -36,6 +44,8 @@ export function LoginForm({ locale, next }: { locale: string; next: string }) {
       <form action={action} className="space-y-4">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="next" value={next} />
+
+        {verified && !state && <Alert tone="success">{t("verifiedBanner")}</Alert>}
 
         {state && !state.ok && (
           <Alert tone="danger">
