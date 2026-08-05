@@ -527,6 +527,7 @@
     "nicknameOptional": "Nickname (optional)",
     "verifyEmailMessage": "Almost there — check your email and click the verification link to activate your account, then sign in.",
     "signUpFailed": "Could not create your account. Please try again.",
+    "signupIncomplete": "Your account was created but could not be fully set up. Please contact an admin.",
     "forgotTitle": "Reset Password",
     "forgotSubtitle": "Enter your account email and we'll send you a link to reset your password.",
     "sendResetLink": "Send Reset Link",

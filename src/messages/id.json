@@ -527,6 +527,7 @@
     "nicknameOptional": "Nama Panggilan (opsional)",
     "verifyEmailMessage": "Hampir selesai — cek email Anda dan klik tautan verifikasi untuk mengaktifkan akun, lalu masuk.",
     "signUpFailed": "Tidak dapat membuat akun Anda. Silakan coba lagi.",
+    "signupIncomplete": "Akun Anda dibuat tetapi belum sepenuhnya siap. Silakan hubungi admin.",
     "forgotTitle": "Reset Kata Sandi",
     "forgotSubtitle": "Masukkan email akun Anda. Kami akan mengirim tautan untuk mengatur ulang kata sandi.",
     "sendResetLink": "Kirim Tautan Reset",
