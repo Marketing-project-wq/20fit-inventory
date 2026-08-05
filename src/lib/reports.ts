@@ -351,6 +351,33 @@ export function resolveSalesPeriod(
   return { from: f, to: t, days };
 }
 
+/**
+ * WIB calendar-month range. `offset` 0 = current month (1st → today, partial);
+ * 1 = previous month (1st → its last day); N = N months back (full month).
+ * Reuses the same WIB day math as `resolveSalesPeriod` so buckets line up.
+ */
+export function wibMonthRange(offset: number): SalesPeriod {
+  const nowWib = new Date(Date.now() + WIB_OFFSET);
+  const y = nowWib.getUTCFullYear();
+  const mo = nowWib.getUTCMonth();
+  const da = nowWib.getUTCDate();
+
+  const target = new Date(Date.UTC(y, mo - offset, 1));
+  const ty = target.getUTCFullYear();
+  const tm = target.getUTCMonth();
+
+  const from = ymd(ty, tm, 1);
+  const to =
+    offset === 0
+      ? ymd(y, mo, da) // current month runs up to today
+      : ymd(ty, tm, new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()); // last day
+  const days =
+    Math.round(
+      (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY,
+    ) + 1;
+  return { from, to, days };
+}
+
 export type SalesSummary = {
   units: number;
   saleCount: number;

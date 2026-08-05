@@ -38,7 +38,13 @@
     "activityTrend": "Tren Aktivitas Stok",
     "perWeek": "Per Minggu",
     "perMonth": "Per Bulan",
-    "week": "Minggu"
+    "week": "Minggu",
+    "salesPerformance": "Kinerja Penjualan — Bulan Ini",
+    "salesTrendTitle": "Penjualan Harian Bulan Ini",
+    "topProducts": "5 Produk Terlaris",
+    "vsLastMonth": "vs bulan lalu",
+    "noPriorData": "Tidak ada penjualan bulan lalu",
+    "noSalesData": "Belum ada penjualan bulan ini"
   },
   "product": {
     "skuCode": "Kode SKU",
