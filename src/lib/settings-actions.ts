@@ -379,6 +379,7 @@ export async function createUserAccount(input: unknown): Promise<CreateUserResul
       user_id: userId,
       is_active: true,
       must_change_password: mustChange,
+      email_verified: true, // admin vouches — no self-verification needed
     })
     .select("staff_id")
     .single();

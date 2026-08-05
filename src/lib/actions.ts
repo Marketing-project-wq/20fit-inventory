@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { issueVerificationCode } from "@/lib/email/verify-otp";
 import { requireRole } from "@/lib/auth";
 
 export type ActionState = {
@@ -561,22 +562,20 @@ const signUpSchema = z.object({
 const STAFF_DOMAIN = "@20fit.id";
 
 /**
- * Public self-service sign-up. Creates the auth account via the anon client
- * (`signUp`, NOT the admin API) so email verification is sent, then reliably
- * provisions a matching shop_staff row via the service-role client:
- *   - `@20fit.id` email → role `staff`, active (into the app once verified);
- *   - any other email  → role `pending`, active but authorized for nothing until
- *     an admin promotes them (they land on /pending after verifying).
- *
- * The staff row is created in this same call, before verification, so the person
- * appears in User Management immediately. `auth.users` is a SHARED ecosystem
- * pool, so the email may already exist there (most @20fit.id staff already have
- * an account) — in that case `signUp` returns an obfuscated user with no id we
- * can trust, so we resolve the real id via `shop_find_auth_user` (which works
- * whether the account was just created or pre-existed) and provision against it.
- * A pre-existing shop_staff row is left untouched (idempotent). If provisioning
- * fails after the auth account exists, we surface an error rather than swallow
- * it, so the user isn't left with app access silently missing.
+ * Public self-service sign-up with our OWN email verification (Supabase's
+ * built-in verification email carries another app's branding in this shared
+ * project). Flow:
+ *   1. Create the auth account already-confirmed in Supabase via the admin API
+ *      (`email_confirm: true` → Supabase sends NO email), or resolve an existing
+ *      account in the shared pool (never resetting its password).
+ *   2. Provision a shop_staff row with `email_verified = false`: `@20fit.id` →
+ *      role `staff`; any other email → role `pending`. It appears in User
+ *      Management immediately, but the middleware `email_verified` gate blocks
+ *      app access until verified.
+ *   3. Email a branded 6-digit code (Mailtrap); the client goes to
+ *      /verifikasi-email to enter it.
+ * A fully-registered (already-verified) email is reported as `already_registered`
+ * so the user is pointed at sign-in. Failures surface an error, never swallowed.
  */
 export async function signUp(
   _prev: ActionState,
@@ -591,55 +590,74 @@ export async function signUp(
   if (!parsed.success) return { ok: false, error: "invalid_input" };
   const d = parsed.data;
   const email = d.email.toLowerCase();
-
-  const sb = await createSupabaseServerClient();
-  const admin = createSupabaseAdminClient();
-  if (!sb || !admin) return { ok: false, error: "not_configured" };
-
-  const origin = await requestOrigin();
   const locale = String(formData.get("locale") ?? "id");
-  // Send the verification link through the shared auth callback, forwarding to
-  // the app root afterward (the callback defaults `next` to the reset page, so
-  // pass it explicitly). Middleware then routes staff → app, pending → /pending.
-  const next = encodeURIComponent(`/${locale}`);
-  const { error: signUpErr } = await sb.auth.signUp({
-    email,
-    password: d.password,
-    options: { emailRedirectTo: `${origin}/${locale}/auth/callback?next=${next}` },
-  });
-  if (signUpErr) {
-    if (/password/i.test(signUpErr.message))
-      return { ok: false, error: "password_short" };
-    console.error(`[signUp] auth.signUp failed for ${email}:`, signUpErr.message);
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: false, error: "not_configured" };
+  const emailPat = email.replace(/[\\%_]/g, "\\$&");
+
+  // Resolve an existing account in the shared pool, else create a NEW one
+  // already-confirmed in Supabase (no Supabase-branded email — we verify below).
+  let userId: string | null = null;
+  const lookup = await admin.rpc("shop_find_auth_user", { p_email: email });
+  if (lookup.error) {
+    console.error(`[signUp] auth lookup failed for ${email}:`, lookup.error.message);
     return { ok: false, error: "signup_failed" };
   }
+  userId = (lookup.data as string | null) ?? null;
 
-  // Resolve the real auth user id. `signUp` obfuscates the id when the email
-  // already exists in the shared pool, so trust this lookup instead.
-  const { data: userId, error: lookupErr } = await admin.rpc(
-    "shop_find_auth_user",
-    { p_email: email },
-  );
-  if (lookupErr || !userId) {
-    console.error(
-      `[signUp] could not resolve auth user for ${email}:`,
-      lookupErr?.message ?? "no id returned",
-    );
+  if (!userId) {
+    const created = await admin.auth.admin.createUser({
+      email,
+      password: d.password,
+      email_confirm: true,
+    });
+    if (created.error || !created.data.user) {
+      const msg = created.error?.message ?? "";
+      if (/regist|exist/i.test(msg)) {
+        // Race: created between our lookup and now — resolve the id and continue.
+        userId = ((await admin.rpc("shop_find_auth_user", { p_email: email })).data as
+          | string
+          | null) ?? null;
+      } else if (/password/i.test(msg)) {
+        return { ok: false, error: "password_short" };
+      } else if (/email/i.test(msg)) {
+        return { ok: false, error: "email_invalid" };
+      } else {
+        console.error(`[signUp] createUser failed for ${email}:`, msg);
+        return { ok: false, error: "signup_failed" };
+      }
+    } else {
+      userId = created.data.user.id;
+    }
+  }
+  if (!userId) {
+    console.error(`[signUp] could not resolve/create auth user for ${email}`);
     return { ok: false, error: "signup_incomplete" };
   }
 
-  // Provision the shop_staff row if this user doesn't already have one (matched
-  // by user_id, then email — wildcards escaped for a literal match).
-  const emailPat = email.replace(/[\\%_]/g, "\\$&");
-  let existing = (
-    await admin.from("shop_staff").select("staff_id").eq("user_id", userId).maybeSingle()
+  // Find or provision the shop_staff row (matched by user_id, then email).
+  let staff = (
+    await admin
+      .from("shop_staff")
+      .select("staff_id,email_verified")
+      .eq("user_id", userId)
+      .maybeSingle()
   ).data;
-  if (!existing) {
-    existing = (
-      await admin.from("shop_staff").select("staff_id").ilike("email", emailPat).maybeSingle()
+  if (!staff) {
+    staff = (
+      await admin
+        .from("shop_staff")
+        .select("staff_id,email_verified")
+        .ilike("email", emailPat)
+        .maybeSingle()
     ).data;
   }
-  if (!existing) {
+  if (staff?.email_verified === true) {
+    // Already a fully-registered shop account — send them to sign-in.
+    return { ok: false, error: "already_registered" };
+  }
+  if (!staff) {
     const role = email.endsWith(STAFF_DOMAIN) ? "staff" : "pending";
     const { error: insErr } = await admin.from("shop_staff").insert({
       full_name: d.full_name,
@@ -648,6 +666,7 @@ export async function signUp(
       role,
       user_id: userId,
       is_active: true,
+      email_verified: false,
     });
     if (insErr) {
       console.error(`[signUp] shop_staff insert failed for ${email}:`, insErr.message);
@@ -655,6 +674,14 @@ export async function signUp(
     }
   }
 
+  // Send our branded verification code; the client advances to /verifikasi-email.
+  const issued = await issueVerificationCode(email, locale);
+  if (!issued.ok) {
+    return {
+      ok: false,
+      error: issued.error === "rate_limited" ? "rate_limited" : "email_send_failed",
+    };
+  }
   return { ok: true, message: "verify_email" };
 }
 

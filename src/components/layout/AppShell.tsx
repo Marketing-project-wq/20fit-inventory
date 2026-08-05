@@ -13,6 +13,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const bareLayout = [
     "/login",
     "/daftar",
+    "/verifikasi-email",
     "/lupa-sandi",
     "/reset-sandi",
     "/ganti-sandi",
