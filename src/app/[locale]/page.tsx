@@ -96,6 +96,7 @@ export default async function DashboardPage() {
 
   const salesCards: {
     label: string;
+    short?: string;
     value: string;
     icon: LucideIcon;
     tone: string;
@@ -111,6 +112,7 @@ export default async function DashboardPage() {
         },
         {
           label: tsr("estRevenue"),
+          short: tsr("estRevenueShort"),
           value: formatIDR(cur.revenue),
           icon: Wallet,
           tone: "text-success",
@@ -118,6 +120,7 @@ export default async function DashboardPage() {
         },
         {
           label: tsr("estProfit"),
+          short: tsr("estProfitShort"),
           value: formatIDR(cur.profit),
           icon: TrendingUp,
           tone: cur.profit >= 0 ? "text-success" : "text-danger",
@@ -133,7 +136,13 @@ export default async function DashboardPage() {
       ]
     : [];
 
-  const kpis: { label: string; value: string; icon: LucideIcon; tone: Tone }[] = [
+  const kpis: {
+    label: string;
+    short?: string;
+    value: string;
+    icon: LucideIcon;
+    tone: Tone;
+  }[] = [
     {
       label: t("totalInventoryValue"),
       value: data ? formatIDR(data.totalInventoryValue) : "—",
@@ -142,6 +151,7 @@ export default async function DashboardPage() {
     },
     {
       label: t("belowReorder"),
+      short: t("belowReorderShort"),
       value: data ? String(data.belowReorder) : "—",
       icon: AlertTriangle,
       tone: "warning",
@@ -199,11 +209,23 @@ export default async function DashboardPage() {
               i === 0 && "col-span-2 xl:col-span-2",
             )}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm text-muted">{k.label}</span>
-              <k.icon size={18} className={cn("shrink-0", toneText[k.tone])} />
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <span className="min-w-0 truncate text-xs text-muted sm:text-sm">
+                {k.short ? (
+                  <>
+                    <span className="sm:hidden">{k.short}</span>
+                    <span className="hidden sm:inline">{k.label}</span>
+                  </>
+                ) : (
+                  k.label
+                )}
+              </span>
+              <k.icon
+                size={16}
+                className={cn("shrink-0 sm:size-[18px]", toneText[k.tone])}
+              />
             </div>
-            <div className="mt-3 truncate font-mono text-xl font-bold whitespace-nowrap text-fg sm:text-2xl">
+            <div className="mt-3 truncate font-mono text-lg font-bold whitespace-nowrap text-fg sm:text-2xl">
               {k.value}
             </div>
           </div>
@@ -246,11 +268,23 @@ export default async function DashboardPage() {
                 key={c.label}
                 className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface p-4 sm:p-5"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm text-muted">{c.label}</span>
-                  <c.icon size={18} className={cn("shrink-0", c.tone)} />
+                <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+                  <span className="min-w-0 truncate text-xs text-muted sm:text-sm">
+                    {c.short ? (
+                      <>
+                        <span className="sm:hidden">{c.short}</span>
+                        <span className="hidden sm:inline">{c.label}</span>
+                      </>
+                    ) : (
+                      c.label
+                    )}
+                  </span>
+                  <c.icon
+                    size={16}
+                    className={cn("shrink-0 sm:size-[18px]", c.tone)}
+                  />
                 </div>
-                <div className="mt-3 truncate font-mono text-xl font-bold whitespace-nowrap text-fg sm:text-2xl">
+                <div className="mt-3 truncate font-mono text-lg font-bold whitespace-nowrap text-fg sm:text-2xl">
                   {c.value}
                 </div>
                 {c.delta.label ? (
@@ -263,6 +297,7 @@ export default async function DashboardPage() {
                     )}
                     <span
                       className={cn(
+                        "truncate",
                         c.delta.dir === "up"
                           ? "text-success"
                           : c.delta.dir === "down"
@@ -272,15 +307,21 @@ export default async function DashboardPage() {
                     >
                       {c.delta.label}
                     </span>
-                    <span className="font-normal text-dim">{t("vsLastMonth")}</span>
+                    {/* Short "MoM" on mobile; full "vs last month" from tablet up. */}
+                    <span className="font-normal text-dim">
+                      <span className="sm:hidden">{t("momShort")}</span>
+                      <span className="hidden sm:inline">{t("vsLastMonth")}</span>
+                    </span>
                   </div>
                 ) : (
-                  <div className="mt-1.5 text-xs text-dim">{t("noPriorData")}</div>
+                  <div className="mt-1.5 truncate text-xs text-dim">
+                    {t("noPriorData")}
+                  </div>
                 )}
               </div>
             ))}
           </div>
-          <p className="-mt-2 text-xs text-dim">{tsr("estimatedNote")}</p>
+          <p className="-mt-2 text-xs leading-snug text-dim">{tsr("estimatedNote")}</p>
 
           {/* Daily sales trend + top 5 products */}
           <div className="grid gap-4 lg:grid-cols-5">
@@ -289,9 +330,9 @@ export default async function DashboardPage() {
             </div>
             <div className="rounded-xl border border-border bg-surface p-5 lg:col-span-2">
               <h3 className="text-sm font-semibold text-fg">{t("topProducts")}</h3>
-              <div className="mt-4 overflow-hidden">
+              <div className="mt-4 overflow-x-auto">
                 {curSales && curSales.topSkus.length > 0 ? (
-                  <table className="w-full text-sm">
+                  <table className="w-full text-xs sm:text-sm">
                     <thead>
                       <tr className="text-left text-xs text-muted">
                         <th className="pb-2 font-medium">{tp("skuCode")}</th>
